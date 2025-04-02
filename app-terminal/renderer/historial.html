@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>HISTORIAL</title>
+    <!-- TailwindCSS CDN -->
+    <script src="assets/sweetalert2@11"></script>
+    <script src="assets/tailwindcss.js"></script>
+    <!-- Vue.js CDN -->
+    <script src="assets/vue.js"></script>
+    <link rel="stylesheet" href="assets/global.css">
+
+    <style>
+        .success-toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 1000;
+        }
+        .success-toast.show {
+            opacity: 1;
+        }
+
+        .error-toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #F44336;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 1000;
+        }
+        .error-toast.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen bg-gray-100">
+<div id="error-toast" class="error-toast"></div>
+<div id="success-toast-print" class="success-toast">
+    <div class="checkmark-circle">
+        <div class="background"></div>
+        <div class="checkmark draw"></div>
+    </div>
+    <span>IMPRIMIENDO...</span>
+</div>
+<div id="app" class="w-full max-w-4xl p-6 bg-white rounded-lg shadow-lg">
+    <!-- Título -->
+    <h2 class="text-xl font-bold text-center mb-4">Historial de Relaciones</h2>
+    <!-- Botón para eliminar por fechas -->
+    <div class="flex justify-end mb-4">
+        <button @click="openEliminarModal" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
+            Eliminar por Fechas
+        </button>
+    </div>
+    <!-- Lista de Relaciones con Tarjetas -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto mb-6">
+        <div v-for=" relacion in relaciones" :key="index" class="bg-gray-50 p-4 rounded-lg shadow-md">
+            <p><strong>ID Relación:</strong> {{ relacion.IDRelacion }}</p>
+            <p><strong>Patente:</strong> {{ relacion.Patente }}</p>
+            <p><strong>Fecha Salida:</strong> {{ relacion.FechaSalida }}</p>
+            <p><strong>Fecha Retorno:</strong> {{ relacion.FechaRetorno }}</p>
+            <p><strong>Procedencia:</strong> {{ relacion.ProcedenciaT }}</p>
+            <p><strong>Destino:</strong> {{ relacion.DestinoA }}</p>
+            <p><strong>Conductor:</strong> {{ obtenerNombreConductor(relacion.ConductorJSON) }}</p>
+            <div class="flex justify-end mt-2 space-x-2">
+                <button @click="openModal('relacion', relacion)"
+                        class="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
+                    Imprimir Relación
+                </button>
+                <button @click="openModal('tarjetas', relacion)"
+                        class="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600">
+                    Imprimir Tarjetas
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paginación -->
+    <div class="flex justify-center mt-4 mb-6">
+        <button @click="paginaAnterior" :disabled="paginaActual === 1"
+                class="px-3 py-1 bg-gray-300 rounded-l hover:bg-gray-400">
+            Anterior
+        </button>
+        <span class="px-3 py-1 bg-gray-200">{{ paginaActual }}</span>
+        <button @click="paginaSiguiente" :disabled="paginaActual === totalPaginas"
+                class="px-3 py-1 bg-gray-300 rounded-r hover:bg-gray-400">
+            Siguiente
+        </button>
+    </div>
+
+    <!-- Modal para Relación -->
+    <div v-if="modal.tipo === 'relacion'" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+        <div class="bg-white p-6 rounded-lg shadow-lg w-96">
+            <h3 class="text-lg font-bold mb-4">Imprimir Relación</h3>
+            <div class="space-y-2">
+                <button @click="imprimir('RELACION-T-A')"
+                        class="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                    Imprimir Relación Tacna - Arica
+                </button>
+                <button @click="imprimir('RELACION-A-T')"
+                        class="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                    Imprimir Relación Arica - Tacna
+                </button>
+                <button @click="imprimir('RELACION-CABEZERA-T-A')"
+                        class="w-full px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
+                    Imprimir Cabezera Tacna - Arica
+                </button>
+                <button @click="imprimir('RELACION-CABEZERA-A-T')"
+                        class="w-full px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
+                    Imprimir Cabezera Arica - Tacna
+                </button>
+            </div>
+            <button @click="closeModal" class="mt-4 w-full px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
+                Cerrar
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal para Tarjetas -->
+    <div v-if="modal.tipo === 'tarjetas'" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+        <div class="bg-white p-6 rounded-lg shadow-lg w-96">
+            <h3 class="text-lg font-bold mb-4">Imprimir Tarjetas</h3>
+            <div class="space-y-2">
+                <button @click="imprimir('TARJETA-T-A')"
+                        class="w-full px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">
+                    Imprimir Tarjeta Tacna - Arica
+                </button>
+                <button @click="imprimir('TARJETA-A-T')"
+                        class="w-full px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">
+                    Imprimir Tarjeta Arica - Tacna
+                </button>
+                <button @click="imprimir('TARJETA-CABEZERA-T-A')"
+                        class="w-full px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
+                    Imprimir Cabezera Tacna - Arica
+                </button>
+                <button @click="imprimir('TARJETA-CABEZERA-A-T')"
+                        class="w-full px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
+                    Imprimir Cabezera Arica - Tacna
+                </button>
+            </div>
+            <button @click="closeModal" class="mt-4 w-full px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
+                Cerrar
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal para Eliminar por Fechas -->
+    <div v-if="eliminarModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+        <div class="bg-white p-6 rounded-lg shadow-lg w-96">
+            <h3 class="text-lg font-bold mb-4">Eliminar Relaciones por Fechas</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Fecha Inicio</label>
+                    <input v-model="fechaInicio" type="date" class="w-full px-3 py-2 border rounded-lg">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Fecha Fin</label>
+                    <input v-model="fechaFin" type="date" class="w-full px-3 py-2 border rounded-lg">
+                </div>
+            </div>
+            <div class="flex justify-end mt-4 space-x-2">
+                <button @click="eliminarModal = false" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
+                    Cancelar
+                </button>
+                <button @click="eliminarRelacionesPorFechas" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
+                    Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Script Vue.js -->
+<script type="module">
+    import {printTemplate, alertaError, alertaSuccess, alertaWarning} from "./utils.js";
+
+    const { createApp, ref, onMounted } = Vue;
+
+    createApp({
+        setup() {
+            // Datos de las relaciones
+            const relaciones = ref([]);
+            const paginaActual = ref(1);
+            const elementosPorPagina = 6;
+            const totalPaginas = ref(1);
+            const modal = ref({ tipo: null, relacion: null });
+            const eliminarModal = ref(false);
+            const fechaInicio = ref("");
+            const fechaFin = ref("");
+            function showError(message) {
+                const toast = document.getElementById("error-toast");
+                toast.textContent = message; // Coloca el mensaje de error
+                toast.classList.add("show");
+
+                // Ocultar después de 3 segundos
+                setTimeout(() => {
+                    toast.classList.remove("show");
+                }, 3000);
+            }
+
+            function showSuccessPrint(message) {
+                const toast = document.getElementById("success-toast-print");
+                toast.querySelector("span").textContent = message;
+                toast.classList.add("show");
+
+                // Ocultar después de 3 segundos
+                setTimeout(() => {
+                    toast.classList.remove("show");
+                }, 5000);
+            }
+
+            // Obtener relaciones desde el backend
+            const obtenerRelaciones = async () => {
+                try {
+                    const response = await window.electronAPI.historial(
+                        paginaActual.value,
+                        elementosPorPagina,
+                    );
+                    relaciones.value = response.data;
+                    totalPaginas.value = response.totalPages;
+                } catch (error) {
+                    console.error("Error al obtener relaciones:", error);
+                }
+            };
+
+            // Método para obtener el nombre del conductor
+            const obtenerNombreConductor = (conductorJSON) => {
+                try {
+                    const conductor = conductorJSON || '{}';
+                    return conductor.Nombre || 'No disponible';
+                } catch (error) {
+                    console.error("Error al parsear ConductorJSON:", error);
+                    return 'No disponible';
+                }
+            };
+
+            // Paginación
+            const paginaAnterior = () => {
+                if (paginaActual.value > 1) {
+                    paginaActual.value--;
+                    obtenerRelaciones();
+                }
+            };
+
+            const paginaSiguiente = () => {
+                if (paginaActual.value < totalPaginas.value) {
+                    paginaActual.value++;
+                    obtenerRelaciones();
+                }
+            };
+
+            // Modal
+            const openModal = (tipo, relacion) => {
+                modal.value = { tipo, relacion };
+            };
+
+            const closeModal = () => {
+                modal.value = { tipo: null, relacion: null };
+            };
+
+            // Imprimir
+            const imprimir = async (tipo) => {
+                const preferencias = await window.electronAPI.getPreferences();
+                if(preferencias[tipo] === undefined) {
+                    await alertaWarning("Necesita configurar una plantilla para esta opcion")
+                    return
+                }
+
+                let impresoraActual = preferencias["IMPRESORA-ACTUAL"];
+                if (!impresoraActual || impresoraActual.trim() === "") {
+                    await alertaWarning("Necesita configurar una impresora para esta opcion");
+                    return;
+                }
+
+                let plantillaResponse = await window.electronAPI.buscarPlantilla(
+                    preferencias[tipo]
+                );
+
+                const data = await processData(modal.value.relacion, tipo);
+                printTemplate(plantillaResponse.data.datos, data, plantillaResponse.data.fuente, impresoraActual);
+                showSuccessPrint("Imprimiendo Relacion");
+            };
+
+
+            const vehiculo = ref({
+                Patente: "",
+                Tipo: "",
+                Modelo: "",
+                Motor: "",
+                Marca: "",
+                Anio: "",
+                Pais: "",
+                Empresa: "",
+                Chasis: "",
+                NroAuto: "",
+                Costo: "",
+            });
+            const buscarVehiculoConConductorPorNroAuto = async (nauto) => {
+                try {
+                    const resultado = await window.electronAPI.obtenerVehiculoConductor(
+                        nauto
+                    );
+
+                    if (!resultado.error || resultado.error === "") {
+                        vehiculo.value = {...vehiculo.value, ...resultado.data.vehiculo};
+                        //conductor.value = {...conductor.value, ...resultado.data.conductor};
+                        return ""
+                    }
+                } catch (error) {
+                    console.error(
+                        `Error al obtener el vehículo con conductor para el nroAuto ${vehiculo.value.NroAuto}`,
+                        error
+                    );
+                    return error
+                }
+            };
+
+            const transformData = async (listado) => {
+                const numeracion = Array.from({ length: listado.length }, (_, index) => index + 1);
+                return {
+                    "PASAJERO_NUMERACION":numeracion,
+                    "PASAJERO_NOMBRES_Y_APELLIDOS": listado.map(pasajero => `${pasajero.Nombre || ""} ${pasajero.ApellidoPa || ""} ${pasajero.ApellidoMa || ""}`.trim()),
+                    "PASAJERO_NACIONALIDAD": listado.map(pasajero => pasajero.Nacionalidad || ""),
+                    "PASAJERO_ESTADO_CIVIL": listado.map(pasajero => pasajero.Estcivil || ""),
+                    "PASAJERO_FECHA_NACIMIENTO": listado.map(pasajero => pasajero.Fechanac || ""),
+                    "PASAJERO_PROFESION": listado.map(pasajero => pasajero.Profesion || ""),
+                    "PASAJERO_NUMERO_DOCUMENTO": listado.map(pasajero => pasajero.Documento || ""),
+                    "PASAJERO_TIPO_DOCUMENTO": listado.map(pasajero => pasajero.TipoDocumento || "")
+                };
+            };
+
+            const processData = async (relacion, tipo) => {
+                let conductor = relacion.ConductorJSON || {};
+                let detallesRelacion = relacion.DetallesRelacionJSON || [];
+                let empresa = relacion.EmpresaJSON || {};
+
+                await buscarVehiculoConConductorPorNroAuto(conductor.Nauto);
+                let dataPasajero = await transformData(detallesRelacion);
+
+                if (tipo.includes("CABEZERA")) {
+                    dataPasajero = {}
+                }
+
+                return {
+                    CABEZERA_FECHA: relacion.FechaSalida,
+                    CABEZERA_PROCEDENCIA: relacion.ProcedenciaT,
+                    CABEZERA_DESTINO: relacion.DestinoA,
+                    VEHICULO_TIPO: vehiculo.value.Tipo,
+                    VEHICULO_MARCA: vehiculo.value.Marca,
+                    VEHICULO_MODELO: vehiculo.value.Modelo,
+                    VEHICULO_AÑO: vehiculo.value.Anio,
+                    VEHICULO_MOTOR: vehiculo.value.Motor,
+                    VEHICULO_CHASIS: vehiculo.value.Chasis,
+                    VEHICULO_PLACA: vehiculo.value.Patente,
+                    VEHICULO_PAIS: vehiculo.value.Pais,
+                    VEHICULO_DI: conductor.Documento,
+                    CONDUCTOR_NOMBRE: `${conductor.Nombre || ""} ${conductor.Apellidopa || ""} ${conductor.Apellidoma || ""}`.trim(),
+                    CONDUCTOR_DOMICILIO: conductor.Direccion,
+                    CONDUCTOR_DOCUMENTO: conductor.Documento,
+                    CONDUCTOR_NACIONALIDAD: conductor.Nacionalidad,
+                    CONDUCTOR_PROFESION: conductor.Profesion,
+                    CONDUCTOR_BREVETE: conductor.Licencia,
+                    CONDUCTOR_FECHA_NACIMIENTO: conductor.Fechanac,
+                    ...dataPasajero,
+                    EMPRESA_AUTORIZADA: empresa.Nombre,
+                    EMPRESA_RESOLUCION_EXENTA: empresa.Resolucion,
+                    EMPRESA_DOCUMENTO_IDONEIDAD: empresa.Documento,
+                    EMPRESA_PERMISO_COMPLEMENTARIO: empresa.Permiso
+                };
+            };
+
+            // Modal para eliminar por fechas
+            const openEliminarModal = () => {
+                eliminarModal.value = true;
+            };
+
+            // Eliminar relaciones por fechas
+            const eliminarRelacionesPorFechas = async () => {
+                if (!fechaInicio.value || !fechaFin.value) {
+                    await alertaWarning("Por favor, selecciona ambas fechas.");
+                    return;
+                }
+
+                try {
+                    const response = await window.electronAPI.deleteRelacionFechas(
+                        fechaInicio.value,
+                        fechaFin.value
+                    );
+                    if (response.error) {
+                        await alertaError(`Error: ${response.error}`);
+                    } else {
+                        await alertaSuccess("Relaciones eliminadas correctamente.");
+                        eliminarModal.value = false;
+                        window.location.reload();
+                    }
+                } catch (error) {
+                    console.error("Error al eliminar relaciones:", error);
+                    await alertaError("Error al eliminar relaciones.");
+                }
+            };
+            // Inicializar
+            onMounted(() => {
+                obtenerRelaciones();
+            });
+
+            return {
+                relaciones,
+                paginaActual,
+                totalPaginas,
+                modal,
+                obtenerNombreConductor,
+                openModal,
+                closeModal,
+                imprimir,
+                paginaAnterior,
+                paginaSiguiente,
+                openEliminarModal,
+                eliminarRelacionesPorFechas,
+                eliminarModal,
+                fechaInicio,
+                fechaFin,
+            };
+        },
+    }).mount("#app");
+</script>
+</body>
+</html>

@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Editor de Plantilla para Impresión</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="assets/tailwindcss.js"></script>
+    <script src="assets/sweetalert2@11"></script>
+    <script src="assets/vue.js"></script>
+    <link rel="stylesheet" href="assets/global.css">
+    <style>
+        #editor-container {
+            background-image: linear-gradient(to right, #ccc 1px, transparent 1px),
+            linear-gradient(to bottom, #ccc 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        @media print {
+            #editor-container {
+                width: 210mm;
+                height: 297mm;
+                margin: 0 auto;
+                box-shadow: none; /* Elimina sombras para la impresión */
+            }
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5); /* Fondo semi-transparente */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 300px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+<div id="app" class="w-full max-w-6xl p-6">
+    <!-- Sección de Labels -->
+    <div class="w-full bg-white p-4 shadow-md rounded-lg mb-4">
+        <h2 class="text-lg font-bold mb-4">DATOS DISPONIBLES PARA IMPRIMIR</h2>
+        <div v-for="(group, category) in groupedLabels" :key="category" class="mb-2">
+            <button @click="toggleDropdown(category)"
+                    class="w-full px-4 py-2 text-left rounded"
+                    :class="colorMap[category] || 'bg-gray-400'"
+            >
+                {{ category }}
+            </button>
+            <div v-show="openDropdowns[category]" class="flex flex-wrap gap-2 mt-2">
+                <div v-for="(label, index) in group" :key="index"
+                     class="p-2 border border-gray-200 rounded cursor-pointer bg-gray-300"
+                     @click="addLabelToEditor(label)">
+                    {{ label.text }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sección de Acciones -->
+    <div class="flex items-center p-3 border-b border-gray-300 w-full bg-white shadow-md mb-4">
+        <div class="flex items-center justify-between w-full">
+            <div>
+                <button
+                        @click="openModal"
+                        class="bg-blue-500 text-white px-4 py-2 rounded mr-2 hover:bg-blue-600 transition duration-200"
+                >
+                    GUARDAR
+                </button>
+                <button
+                        @click="printTemplate"
+                        class="bg-yellow-500 text-white px-4 py-2 rounded mr-2 hover:bg-yellow-600 transition duration-200"
+                >
+                    IMPRIMIR
+                </button>
+                <button
+                        v-if="selectedRelation !== ''"
+                        @click="actualizarPlantilla"
+                        class="bg-green-500 text-white px-4 py-2 rounded mr-2 transition duration-200"
+                >
+                    ACTUALIZAR
+                </button>
+                <button
+                        v-if="selectedRelation !== ''"
+                        @click="eliminarPlantilla"
+                        class="bg-red-500 text-white px-4 py-2 rounded mr-2 hover:bg-red-600 transition duration-200"
+                >
+                    ELIMINAR
+                </button>
+                <label>
+                    <select
+                            v-model="selectedRelation"
+                            @change="handleSelect"
+                            class="bg-blue-500 text-white px-4 py-2 rounded cursor-pointer hover:bg-blue-600 transition duration-200"
+                    >
+                        <option disabled value="">Seleccione una opción</option>
+                        <option v-for="item in plantillas" :key="item.id" :value="item.id">
+                            {{ item.titulo }}
+                        </option>
+                    </select>
+                </label>
+            </div>
+            <div class="flex items-center space-x-4 bg-gray-100 p-3 rounded-lg w-36 max-w-xs">
+                <!-- Icono descriptivo -->
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 12h2M4 12H2" />
+                </svg>
+
+                <!-- Input con diseño minimalista pero elegante -->
+                <input
+                        type="number"
+                        class="w-full bg-transparent text-sm text-gray-700 placeholder-gray-500 focus:outline-none focus:text-gray-900"
+                        placeholder="Tamaño"
+                        v-model="fuente"
+                />
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Sección de Campo de Impresión -->
+    <div class="flex items-center justify-center min-h-screen bg-gray-100">
+        <div
+                id="editor-container"
+                class="relative w-[900px] h-[1000px] border-2 border-black bg-white overflow-hidden shadow-md rounded-lg"
+        >
+            <div
+                    v-for="(label, index) in labels"
+                    :key="index"
+                    :style="{ top: label.top, left: label.left, color: label.color }"
+                    class="draggable absolute p-1 cursor-move select-none font-bold text-xs max-w-[100px] overflow-hidden text-ellipsis whitespace-nowrap"
+                    :class="`text-${label.color}-500`"
+                    @mousedown="startDrag($event, index)"
+                    @dblclick="removeLabel(index)"
+                    @mouseenter="showFullLabel(index, label.text, $event)"
+                    @mouseleave="hideFullLabel"
+            >
+                {{ getAlias(label.text) }}
+            </div>
+
+            <!-- Nombre completo flotante al hacer hover -->
+            <div
+                    v-if="hoverLabel.visible"
+                    :style="{ top: hoverLabel.y + 'px', left: hoverLabel.x + 'px' }"
+                    class="fixed bg-black text-white text-xs p-1 rounded shadow-md z-[9999]"
+            >
+                {{ hoverLabel.text }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal-overlay">
+        <div class="modal-content flex flex-col gap-4 justify-center items-center">
+            <div class="flex gap-2 items-center">
+                <label class="text-sm">Nombre:</label>
+                <input type="text" class="border p-1 text-sm h-8 w-32" v-model="form.id"/>
+            </div>
+
+            <div class="flex gap-4">
+                <button
+                        class="mt-4 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition duration-200"
+                        @click="saveCoordinates"
+                >
+                    Guardar
+                </button>
+                <button
+                        class="mt-4 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition duration-200"
+                        @click="closeModal"
+                >
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    const {createApp, ref, onMounted, reactive, computed} = Vue;
+    import {printTemplateTest, alertaWarning, alertaError, alertaSuccess} from './utils.js';
+
+    createApp({
+        setup() {
+            const showModal = ref(false);
+            const fuente = ref("");
+            const form = reactive({
+                id: "",
+            });
+            const closeModal = () => {
+                form.id = "";
+                showModal.value = false;
+            };
+
+            const openModal = () => {
+                showModal.value = true;
+            };
+
+            const eliminarPlantilla = async () => {
+                let response = await window.electronAPI.eliminarPlantilla(
+                    selectedRelation.value,
+                );
+
+                if (response.error !== "") {
+                    await alertaError("Fallo al eliminar la plantilla");
+                } else {
+                    await alertaSuccess("Se elimino la plantilla");
+                    window.location.reload()
+                }
+            }
+            const availableLabels = ref([
+                {text: "CABEZERA_FECHA", color: "stone", category: "CABEZERA"},
+                {text: "CABEZERA_PROCEDENCIA", color: "stone", category: "CABEZERA"},
+                {text: "CABEZERA_DESTINO", color: "stone", category: "CABEZERA"},
+
+                {text: "VEHICULO_TIPO", color: "orange", category: "VEHICULO"},
+                {text: "VEHICULO_MARCA", color: "orange", category: "VEHICULO"},
+                {text: "VEHICULO_MODELO", color: "orange", category: "VEHICULO"},
+                {text: "VEHICULO_AÑO", color: "orange", category: "VEHICULO"},
+                {text: "VEHICULO_MOTOR", color: "orange", category: "VEHICULO"},
+                {text: "VEHICULO_CHASIS", color: "orange", category: "VEHICULO"},
+                {text: "VEHICULO_PLACA", color: "orange", category: "VEHICULO"},
+                {text: "VEHICULO_PAIS", color: "orange", category: "VEHICULO"},
+                {text: "VEHICULO_DI", color: "orange", category: "VEHICULO"},
+
+                {text: "CONDUCTOR_NOMBRE", color: "blue", category: "CONDUCTOR"},
+                {text: "CONDUCTOR_DOMICILIO", color: "blue", category: "CONDUCTOR"},
+                {text: "CONDUCTOR_DOCUMENTO", color: "blue", category: "CONDUCTOR"},
+                {text: "CONDUCTOR_NACIONALIDAD", color: "blue", category: "CONDUCTOR"},
+                {text: "CONDUCTOR_PROFESION", color: "blue", category: "CONDUCTOR"},
+                {text: "CONDUCTOR_BREVETE", color: "blue", category: "CONDUCTOR"},
+                {text: "CONDUCTOR_FECHA_NACIMIENTO", color: "blue", category: "CONDUCTOR"},
+
+                {text: "EMPRESA_AUTORIZADA", color: "purple", category: "EMPRESA"},
+                {text: "EMPRESA_RESOLUCION_EXENTA", color: "purple", category: "EMPRESA"},
+                {text: "EMPRESA_DOCUMENTO_IDONEIDAD", color: "purple", category: "EMPRESA"},
+                {text: "EMPRESA_PERMISO_COMPLEMENTARIO", color: "purple", category: "EMPRESA"},
+
+                {text: "PASAJERO_NUMERACION", color: "teal", category: "PASAJERO"},
+                {text: "PASAJERO_NOMBRES_Y_APELLIDOS", color: "teal", category: "PASAJERO"},
+                {text: "PASAJERO_NACIONALIDAD", color: "teal", category: "PASAJERO"},
+                {text: "PASAJERO_TIPO_DOCUMENTO", color: "teal", category: "PASAJERO"},
+                {text: "PASAJERO_NUMERO_DOCUMENTO", color: "teal", category: "PASAJERO"},
+                {text: "PASAJERO_ESTADO_CIVIL", color: "teal", category: "PASAJERO"},
+                {text: "PASAJERO_FECHA_NACIMIENTO", color: "teal", category: "PASAJERO"},
+                {text: "PASAJERO_PROFESION", color: "teal", category: "PASAJERO"},
+            ]);
+
+            const labels = ref([]);
+
+            const addLabelToEditor = (label) => {
+                labels.value.push({
+                    ...label,
+                    top: "20px",
+                    left: "20px"
+                });
+            };
+
+            const removeLabel = (index) => {
+                if (confirm("¿Estás seguro de que quieres eliminar este label?")) {
+                    labels.value.splice(index, 1);
+                }
+                hideFullLabel()
+            };
+
+            const groupedLabels = computed(() => {
+                return availableLabels.value.reduce((acc, label) => {
+                    if (!acc[label.category]) acc[label.category] = [];
+                    acc[label.category].push(label);
+                    return acc;
+                }, {});
+            });
+
+            const openDropdowns = ref({});
+
+            const toggleDropdown = (category) => {
+                openDropdowns.value[category] = !openDropdowns.value[category];
+            };
+
+            const colorMap = {
+                "CABEZERA": "bg-stone-400",
+                "VEHICULO": "bg-orange-400",
+                "CONDUCTOR": "bg-blue-400",
+                "PASAJERO": "bg-teal-400",
+                "EMPRESA": "bg-purple-400",
+            };
+
+            const actualizarPlantilla = async () => {
+                if (selectedRelation.value === "") {
+                    await alertaWarning("No existen datos seleccionados");
+                    return;
+                }
+
+                try {
+                    let titulo;
+                    for (const v of plantillas.value) {
+                        if (v.id === selectedRelation.value) {
+                            titulo = v.titulo;
+                        }
+                    }
+
+                    const coordinates = labels.value.map((label) => ({
+                        text: label.text,
+                        top: label.top,
+                        left: label.left,
+                        color: label.color,
+                    }));
+
+                    const resultado = await window.electronAPI.actualizarPlantilla({
+                        id: selectedRelation.value,
+                        titulo: titulo,
+                        fuente: fuente.value.toString(),
+                        datos: coordinates,
+                    });
+
+                    if (resultado.error) {
+                        console.error("Error al actualizar la plantilla:", resultado.error);
+                        await alertaError(`Error: ${resultado.error}`);
+                        return;
+                    }
+
+                    await alertaSuccess("Plantilla actualizada correctamente");
+                } catch (error) {
+                    console.error("Error inesperado:", error);
+                    await alertaError(`Error inesperado: ${error.message}`);
+                }
+            };
+
+            const selectedRelation = ref("");
+
+            const handleSelect = async () => {
+                let response = await window.electronAPI.buscarPlantilla(
+                    selectedRelation.value
+                );
+                if (response.error !== "") {
+                    await alertaError("Error al buscar la plantilla.");
+                } else {
+                    fuente.value = response.data.fuente;
+                    labels.value = response.data.datos;
+                    await alertaSuccess("Plantilla Cargado con exito")
+                }
+            };
+
+            let isDragging = false;
+            let dragIndex = null;
+            let offsetX = 0;
+            let offsetY = 0;
+
+            const startDrag = (event, index) => {
+                isDragging = true;
+                dragIndex = index;
+                const rect = event.target.getBoundingClientRect();
+                offsetX = event.clientX - rect.left;
+                offsetY = event.clientY - rect.top;
+
+                document.addEventListener("mousemove", onDrag);
+                document.addEventListener("mouseup", stopDrag);
+                document.addEventListener("mouseleave", stopDrag);
+            };
+
+            const onDrag = (event) => {
+                if (!isDragging) return;
+
+                requestAnimationFrame(() => {
+                    const container = document.getElementById("editor-container");
+                    if (!container) return;
+
+                    const containerRect = container.getBoundingClientRect();
+                    const x = event.clientX - containerRect.left - offsetX;
+                    const y = event.clientY - containerRect.top - offsetY;
+
+                    const label = labels.value[dragIndex];
+                    if (!label) return;
+
+                    // Evita que el label se salga del contenedor
+                    const maxX = containerRect.width - event.target.offsetWidth;
+                    const maxY = containerRect.height - event.target.offsetHeight;
+
+                    label.left = `${Math.max(0, Math.min(x, maxX))}px`;
+                    label.top = `${Math.max(0, Math.min(y, maxY))}px`;
+                });
+            };
+
+            const stopDrag = () => {
+                isDragging = false;
+                document.removeEventListener("mousemove", onDrag);
+                document.removeEventListener("mouseup", stopDrag);
+                document.removeEventListener("mouseleave", stopDrag);
+            };
+
+
+            const saveCoordinates = async () => {
+                const coordinates = labels.value.map((label) => ({
+                    text: label.text,
+                    top: label.top,
+                    left: label.left,
+                    color: label.color,
+                }));
+
+                let response = await window.electronAPI.guardarPlantilla(
+                    form.id,
+                    fuente.value.toString(),
+                    coordinates
+                );
+                if (response.error !== "") {
+                    await alertaError("Fallo el guardado del modelo de Impresion");
+                } else {
+                    await alertaSuccess("Coordenadas guardadas en la base de datos.");
+                    window.location.reload()
+                }
+            };
+
+            const printTemplateLocal = () => {
+                printTemplateTest(labels.value, data, fuente.value);
+            };
+
+            const plantillas = ref([]);
+
+            const listarPlantillas = async () => {
+                let response = await window.electronAPI.listarPlantillas();
+                if (response.message && response.message === "ok") {
+                    plantillas.value = response.data;
+                    return;
+                } else {
+                    await alertaError("No se pudieron cargar las plantillas");
+                }
+            }
+            onMounted(() => {
+                listarPlantillas()
+            });
+
+            const data = {
+                CABEZERA_FECHA: "28/01/2025",
+                CABEZERA_PROCEDENCIA: "TACNA",
+                CABEZERA_DESTINO: "ARICA",
+
+                VEHICULO_TIPO: "AUTOMÓVIL",
+                VEHICULO_MARCA: "CHEVROLET",
+                VEHICULO_MODELO: "IMPALA 3.6",
+                VEHICULO_AÑO: "2014",
+                VEHICULO_MOTOR: "S/N",
+                VEHICULO_CHASIS: "2G1WA5E35E1139276",
+                VEHICULO_PLACA: "RKLR 68",
+                VEHICULO_PAIS: "CHILE",
+                VEHICULO_DI: "4805940-6",
+
+                CONDUCTOR_NOMBRE: "JOSE RIFO LAGOS",
+                CONDUCTOR_DOMICILIO: "TERMINAL ARICA",
+                CONDUCTOR_DOCUMENTO: "14737868-8",
+                CONDUCTOR_NACIONALIDAD: "CHILE",
+                CONDUCTOR_PROFESION: "CONDUCTOR",
+                CONDUCTOR_BREVETE: "14737868-8",
+                CONDUCTOR_FECHA_NACIMIENTO: "28/01/2025",
+                PASAJERO_NUMERACION: [1,2,3,4,5],
+                PASAJERO_NOMBRES_Y_APELLIDOS: [
+                    "JOSE PASTOR",
+                    "MARIA GOMEZ",
+                    "JUAN PEREZ",
+                    "ANA LOPEZ",
+                    "LUIS RAMIREZ",
+                ],
+                PASAJERO_NACIONALIDAD: ["CHILE", "PERU", "ARGENTINA", "COLOMBIA", "ECUADOR"],
+                PASAJERO_TIPO_DOCUMENTO: ["DNI", "PASAPORTE", "DNI", "PASAPORTE", "DNI"],
+                PASAJERO_NUMERO_DOCUMENTO: [
+                    "12621524-K",
+                    "23456789-L",
+                    "34567890-M",
+                    "45678901-N",
+                    "56789012-O",
+                ],
+                PASAJERO_ESTADO_CIVIL: ["S", "C", "D", "V", "S"],
+                PASAJERO_FECHA_NACIMIENTO: [
+                    "28/01/2025",
+                    "28/01/2025",
+                    "28/01/2025",
+                    "28/01/2025",
+                    "28/01/2025",
+                ],
+                PASAJERO_PROFESION: [
+                    "EMPLEADO",
+                    "DOCTOR",
+                    "INGENIERO",
+                    "ABOGADO",
+                    "TECNICO",
+                ],
+                EMPRESA_AUTORIZADA: "EMPRESA S.A.",
+                EMPRESA_RESOLUCION_EXENTA: "123456",
+                EMPRESA_DOCUMENTO_IDONEIDAD: "DOC-123",
+                EMPRESA_PERMISO_COMPLEMENTARIO: "PERM-456",
+            };
+
+            const hoverLabel = ref({ visible: false, text: "", x: 0, y: 0 });
+
+            const showFullLabel = (index, text, event) => {
+                const rect = event.target.getBoundingClientRect();
+                hoverLabel.value = {
+                    visible: true,
+                    text,
+                    x: rect.left,  // Lo alinea con el label
+                    y: rect.top - 20,  // Lo coloca justo arriba del label
+                };
+            };
+
+            const hideFullLabel = () => {
+                hoverLabel.value.visible = false;
+            };
+
+            const getAlias = (text) => {
+                // Definir alias más cortos para cada label
+                const aliasMap = {
+                    CABEZERA_FECHA: "FECHA",
+                    CABEZERA_PROCEDENCIA: "PROC.",
+                    CABEZERA_DESTINO: "DEST.",
+
+                    VEHICULO_TIPO: "V. TIPO",
+                    VEHICULO_MARCA: "V.MARCA",
+                    VEHICULO_MODELO: "V. MODELO",
+                    VEHICULO_AÑO: "V. AÑO",
+                    VEHICULO_MOTOR: "V. MOTOR",
+                    VEHICULO_CHASIS: "V. CHASIS",
+                    VEHICULO_PLACA: "V. PLACA",
+                    VEHICULO_PAIS: "V. PAIS",
+                    VEHICULO_DI: "V. DI",
+
+                    CONDUCTOR_NOMBRE: "C. NOMBRE",
+                    CONDUCTOR_DOMICILIO: "C. DOMIC.",
+                    CONDUCTOR_DOCUMENTO: "C. DOC.",
+                    CONDUCTOR_NACIONALIDAD: "C. NAC.",
+                    CONDUCTOR_PROFESION: "C. PROF.",
+                    CONDUCTOR_BREVETE: "C. BREVETE",
+                    CONDUCTOR_FECHA_NACIMIENTO: "C. NACIM.",
+
+                    PASAJERO_NUMERACION:"NRO.P",
+                    PASAJERO_NOMBRES_Y_APELLIDOS: "P. NOMBRE",
+                    PASAJERO_NACIONALIDAD: "P. NAC.",
+                    PASAJERO_TIPO_DOCUMENTO: "P. T.DOC.",
+                    PASAJERO_NUMERO_DOCUMENTO: "P. N° DOC.",
+                    PASAJERO_ESTADO_CIVIL: "P. CIVIL",
+                    PASAJERO_FECHA_NACIMIENTO: "P. NACIM.",
+                    PASAJERO_PROFESION: "P. PROF.",
+
+                    EMPRESA_AUTORIZADA: "E. AUTORIZ.",
+                    EMPRESA_RESOLUCION_EXENTA: "E. RES. EX.",
+                    EMPRESA_DOCUMENTO_IDONEIDAD: "E. ID",
+                    EMPRESA_PERMISO_COMPLEMENTARIO: "E. PERMISO",
+                };
+
+                return aliasMap[text] || text; // Devuelve alias o el texto original si no hay alias
+            };
+            return {
+                hideFullLabel,
+                showFullLabel,
+                getAlias,
+                hoverLabel,
+                showModal,
+                labels,
+                selectedRelation,
+                startDrag,
+                saveCoordinates,
+                openModal,
+                closeModal,
+                printTemplate: printTemplateLocal,
+                plantillas,
+                listarPlantillas,
+                handleSelect,
+                form,
+                actualizarPlantilla,
+                availableLabels,
+                addLabelToEditor,
+                eliminarPlantilla,
+                removeLabel,
+                groupedLabels,
+                openDropdowns,
+                toggleDropdown,
+                colorMap,
+                fuente,
+            };
+        },
+    }).mount("#app");
+</script>
+</body>
+</html>

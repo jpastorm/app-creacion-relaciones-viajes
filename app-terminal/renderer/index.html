@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SISTEMA DE RELACION DE PASAJEROS</title>
+  <link rel="stylesheet" href="assets/flatpickr.min.css" />
+  <script src="assets/flatpickr"></script>
+  <script src="assets/sweetalert2@11"></script>
+  <script src="assets/tailwindcss.js"></script>
+  <script src="assets/vue.js"></script>
+  <link rel="stylesheet" href="assets/index.css" />
+  <link rel="stylesheet" href="assets/global.css">
+</head>
+
+<body>
+  <div id="app" style="max-height: 100vh; overflow: hidden">
+    <div id="success-toast" class="success-toast">¡PASAJERO ENCONTRADO!</div>
+    <div id="error-toast" class="error-toast"></div>
+    <div id="success-toast-print" class="success-toast">
+      <div class="checkmark-circle">
+        <div class="background"></div>
+        <div class="checkmark draw"></div>
+      </div>
+      <span>IMPRIMIENDO...</span>
+    </div>
+
+    <!-- Menú superior -->
+    <div class="flex items-center justify-between bg-white shadow-md px-6 py-2 mb-2">
+      <div class="flex space-x-4 text-sm font-medium">
+        <!-- Opción Configuración -->
+        <div class="relative">
+          <button class="text-gray-700 hover:text-blue-600 focus:outline-none" @click="toggleMenu('configuracion')">
+            CONFIGURACION
+          </button>
+          <div v-if="activeMenu === 'configuracion'"
+            class="absolute top-full left-0 mt-2 w-40 bg-white shadow-lg rounded-md overflow-hidden z-10">
+            <a href="#" class="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+              @click.stop="openWindow('imprimir.html')">
+              IMPRIMIR
+            </a>
+            <a href="#" class="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+              @click.stop="openWindow('preferencias.html')">
+              PREFERENCIAS
+            </a>
+          </div>
+        </div>
+
+        <!-- Opción Entidades -->
+        <div class="relative">
+          <button class="text-gray-700 hover:text-blue-600 focus:outline-none" @click="toggleMenu('entidades')">
+            ENTIDADES
+          </button>
+          <div v-if="activeMenu === 'entidades'"
+            class="absolute top-full left-0 mt-2 w-40 bg-white shadow-lg rounded-md overflow-hidden z-10">
+            <a href="#" class="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+              @click.stop="openWindow('conductor.html')">
+              CONDUCTOR
+            </a>
+            <a href="#" class="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+              @click.stop="openWindow('pasajero.html')">
+              PASAJERO
+            </a>
+            <a href="#" class="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+              @click.stop="openWindow('vehiculo.html')">
+              VEHICULO
+            </a>
+          </div>
+        </div>
+
+        <!-- Opción Historial -->
+        <button class="text-gray-700 hover:text-blue-600 focus:outline-none" @click="openWindow('historial.html')">
+          HISTORIAL
+        </button>
+      </div>
+    </div>
+
+    <div class="transform scale-[0.99] origin-top w-screen h-screen">
+      <div class="flex flex-wrap gap-4 justify-center">
+        <div class="flex items-center gap-2">
+          <div class="flex flex-wrap gap-4 justify-center">
+            <!-- Procedencia -->
+            <div
+              class="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg border border-gray-300 hover:bg-gray-200 transition duration-300">
+              <label for="procedencia" class="font-medium text-gray-700">Procedencia</label>
+              <input type="checkbox" id="procedencia"
+                class="form-checkbox h-5 w-5 text-blue-500 rounded focus:ring-blue-500"
+                v-model="relacionInfo.Procedencia" />
+            </div>
+
+            <!-- Destino -->
+            <div
+              class="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg border border-gray-300 hover:bg-gray-200 transition duration-300">
+              <label for="destino" class="font-medium text-gray-700">Destino</label>
+              <input type="checkbox" id="destino"
+                class="form-checkbox h-5 w-5 text-blue-500 rounded focus:ring-blue-500"
+                v-model="relacionInfo.Destino" />
+            </div>
+            <!-- FECHA -->
+            <div
+              class="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg border border-gray-300 hover:bg-gray-200 transition duration-300">
+              <label for="fecha" class="font-medium text-gray-700">Fecha</label>
+              <input type="checkbox" id="fecha" class="form-checkbox h-5 w-5 text-blue-500 rounded focus:ring-blue-500"
+                v-model="relacionInfo.IsFecha" />
+            </div>
+          </div>
+          <label for="fecha-salida">Fecha Salida:</label>
+          <input type="text" id="fecha-salida" class="border p-2" placeholder="Seleccione fecha"
+            v-model="relacionInfo.FechaSalida" />
+          <span class="cursor-pointer" @click="mostrarCalendario('fecha-salida')">📅</span>
+        </div>
+
+        <!--            <div class="flex items-center gap-2">-->
+        <!--                <label for="fecha-retorno">Fecha Retorno:</label>-->
+        <!--                <input-->
+        <!--                        type="text"-->
+        <!--                        id="fecha-retorno"-->
+        <!--                        class="border p-2"-->
+        <!--                        placeholder="Seleccione fecha"-->
+        <!--                        v-model="relacionInfo.FechaRetorno"-->
+        <!--                />-->
+        <!--                <span-->
+        <!--                        class="cursor-pointer"-->
+        <!--                        @click="mostrarCalendario('fecha-retorno')"-->
+        <!--                >📅</span-->
+        <!--                >-->
+        <!--            </div>-->
+
+        <div class="flex items-center gap-2">
+          <label for="nro-relacion">Nro Relación:</label>
+          <input type="text" id="nro-relacion" class="border p-2 w-16" placeholder="Número de relación"
+            v-model="relacionInfo.NroRelacion" />
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label for="nro-pasajero">Nro Pasajero:</label>
+          <input type="text" id="nro-pasajero" class="border p-2 w-16" placeholder="Número de pasajero"
+            v-model="relacionInfo.NroPasajero" readonly />
+        </div>
+
+        <div
+          class="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg cursor-pointer hover:bg-blue-600 hover:shadow-lg transition duration-300"
+          @click="openPageMain">
+          <label>Nueva Relación:</label>
+          <span class="text-lg"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor"
+              class="bi bi-newspaper" viewBox="0 0 16 16">
+              <path
+                d="M0 2.5A1.5 1.5 0 0 1 1.5 1h11A1.5 1.5 0 0 1 14 2.5v10.528c0 .3-.05.654-.238.972h.738a.5.5 0 0 0 .5-.5v-9a.5.5 0 0 1 1 0v9a1.5 1.5 0 0 1-1.5 1.5H1.497A1.497 1.497 0 0 1 0 13.5zM12 14c.37 0 .654-.211.853-.441.092-.106.147-.279.147-.531V2.5a.5.5 0 0 0-.5-.5h-11a.5.5 0 0 0-.5.5v11c0 .278.223.5.497.5z" />
+              <path
+                d="M2 3h10v2H2zm0 3h4v3H2zm0 4h4v1H2zm0 2h4v1H2zm5-6h2v1H7zm3 0h2v1h-2zM7 8h2v1H7zm3 0h2v1h-2zm-3 2h2v1H7zm3 0h2v1h-2zm-3 2h2v1H7zm3 0h2v1h-2z" />
+            </svg></span>
+        </div>
+      </div>
+      <div class="w-full h-full bg-white p-2 shadow-lg rounded-lg">
+        <div class="flex gap-2">
+          <div class="bg-yellow-50 p-2 rounded-lg flex flex-wrap gap-2 basis-[40%]">
+            <!-- Input: Patente -->
+            <div class="flex items-center gap-2">
+              <label class="text-sm">PATENTE:</label>
+              <input id="input-1" type="text" maxlength="12" class="w-24 border p-1 text-sm h-8"
+                v-model="vehiculo.Patente" @keyup.enter="focusNextInput('input-1', 'input-12', 'input-2')" />
+              <button
+                class="p-1 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center justify-center w-8 h-8"
+                @click="focusNextInput('input-1', 'input-12', 'input-2')">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" stroke="white"
+                  stroke-width="2" class="bi bi-search" viewBox="0 0 16 16">
+                  <path
+                    d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Input: Tipo -->
+            <div class="flex items-center gap-2">
+              <label class="text-sm">TIPO:</label>
+              <input id="input-2" type="text" maxlength="15" class="w-14 border p-1 text-sm h-8" v-model="vehiculo.Tipo"
+                @keyup.enter="focusNextInput('input-2', 'input-3', 'input-3')" />
+            </div>
+
+            <!-- Input: Modelo -->
+            <div class="flex items-center gap-2">
+              <label class="text-sm">MODELO:</label>
+              <input id="input-3" type="text" class="w-24 border p-1 text-sm h-8" maxlength="15"
+                v-model="vehiculo.Modelo" @keyup.enter="focusNextInput('input-3', 'input-4', 'input-4')" />
+            </div>
+
+            <!-- Input: Motor -->
+            <div class="flex items-center gap-2">
+              <label class="text-sm">MOTOR:</label>
+              <input id="input-4" type="text" class="w-32 border p-1 text-sm h-8" maxlength="15"
+                v-model="vehiculo.Motor" @keyup.enter="focusNextInput('input-4', 'input-5', 'input-5')" />
+            </div>
+
+            <!-- Input: Marca -->
+            <div class="flex items-center gap-2">
+              <label class="text-sm">MARCA:</label>
+              <input id="input-5" type="text" maxlength="15" class="w-24 border p-1 text-sm h-8"
+                v-model="vehiculo.Marca" @keyup.enter="focusNextInput('input-5', 'input-6', 'input-6')" />
+            </div>
+
+            <!-- Input: Nro Auto -->
+            <div class="flex items-center gap-2">
+              <label class="w-20 text-sm">NRO AUTO:</label>
+              <input id="input-6" type="text" maxlength="5" class="w-14 border p-1 text-sm h-8"
+                v-model="vehiculo.NroAuto" @keyup.enter="focusNextInput('input-6','dni','input-1,input-7')" />
+
+              <button
+                class="p-1 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center justify-center w-8 h-8"
+                @click="buscarVehiculoConConductorPorNroAuto">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" stroke="white"
+                  stroke-width="2" class="bi bi-search" viewBox="0 0 16 16">
+                  <path
+                    d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Input: Año -->
+            <div class="flex items-center gap-2">
+              <label class="text-sm">AÑO:</label>
+              <input id="input-7" maxlength="4" type="text" class="w-12 border p-1 text-sm h-8" v-model="vehiculo.Anio"
+                @keyup.enter="focusNextInput('input-7', 'input-8', 'input-8')" />
+            </div>
+
+            <!-- Input: País -->
+            <div class="flex items-center gap-2">
+              <label class="text-sm">PAÍS:</label>
+              <input id="input-8" type="text" maxlength="8" class="w-32 border p-1 text-sm h-8" v-model="vehiculo.Pais"
+                @keyup.enter="focusNextInput('input-8', 'input-9', 'input-9')" />
+            </div>
+
+            <!-- Input: Empresa -->
+            <div class="flex items-center gap-2">
+              <label class="w-20 text-sm">EMPRESA:</label>
+              <input id="input-9" type="text" maxlength="45" class="w-32 border p-1 text-sm h-8"
+                v-model="vehiculo.Empresa" @keyup.enter="focusNextInput('input-9', 'input-10', 'input-10')" />
+            </div>
+
+            <!-- Input: Chasis -->
+            <div class="flex items-center gap-2">
+              <label class="text-sm">CHASIS:</label>
+              <input id="input-10" type="text" class="w-40 border p-1 text-sm h-8" maxlength="45"
+                v-model="vehiculo.Chasis" @keyup.enter="focusNextInput('input-10','input-12','input-10')" />
+            </div>
+
+            <!-- Input: Costo -->
+            <div class="flex items-center gap-2 hidden">
+              <label class="w-20 text-sm">COSTO:</label>
+              <input id="input-11" type="text" class="w-32 border p-1 text-sm h-8" v-model="vehiculo.Costo"
+                maxlength="8" />
+            </div>
+          </div>
+          <div class="bg-blue-50 p-2 rounded-lg flex flex-wrap gap-2 basis-[40%]">
+            <!-- DNI/CÉDULA -->
+            <div class="flex items-center gap-2">
+              <label class="text-sm whitespace-nowrap">DNI/CÉDULA:</label>
+              <input type="text" class="w-24 border text-sm h-8 p-0.5" id="input-12" v-model="conductor.Documento"
+                maxlength="12" @keyup.enter="focusNextInput('input-12','input-21','input-13')" />
+              <button
+                class="p-1 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center justify-center w-8 h-8"
+                @click="focusNextInput('input-12','dni','input-13')">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" stroke="white"
+                  stroke-width="2" class="bi bi-search" viewBox="0 0 16 16">
+                  <path
+                    d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- NOMBRES -->
+            <div class="flex items-center gap-2">
+              <label class="text-sm whitespace-nowrap">NOMBRES:</label>
+              <input id="input-13" type="text" maxlength="20" class="flex-1 border p-0.5 text-sm h-7 w-32"
+                v-model="conductor.Nombre" @keyup.enter="focusNextInput('input-13','input-14','input-14')" />
+            </div>
+
+            <!-- APELLIDO PATERNO -->
+            <div class="flex items-center gap-2">
+              <label class="text-sm whitespace-nowrap">APELLIDO P:</label>
+              <input id="input-14" type="text" class="flex-1 border p-0.5 text-sm h-7 w-32"
+                v-model="conductor.ApellidoPa" maxlength="20"
+                @keyup.enter="focusNextInput('input-14','input-15','input-15')" />
+            </div>
+
+            <!-- APELLIDO MATERNO -->
+            <div class="flex items-center gap-2">
+              <label class="text-sm whitespace-nowrap">APELLIDO M:</label>
+              <input id="input-15" type="text" class="flex-1 border p-0.5 text-sm h-7 w-32"
+                v-model="conductor.ApellidoMa" maxlength="20"
+                @keyup.enter="focusNextInput('input-15','input-16','input-16')" />
+            </div>
+
+            <!-- DOMICILIO -->
+            <div class="flex items-center gap-2">
+              <label class="text-sm whitespace-nowrap">DOMICILIO:</label>
+              <input id="input-16" type="text" class="flex-1 border p-0.5 text-sm h-7 w-42"
+                v-model="conductor.Direccion" maxlength="255"
+                @keyup.enter="focusNextInput('input-16','input-17','input-17')" />
+            </div>
+
+            <!-- LICENCIA -->
+            <!--                    <div class="flex items-center gap-2">-->
+            <!--                        <label class="text-sm whitespace-nowrap">LICENCIA:</label>-->
+            <!--                        <input-->
+            <!--                                id="input-17"-->
+            <!--                                type="text"-->
+            <!--                                class="flex-1 border p-0.5 text-sm h-7"-->
+            <!--                                v-model="conductor.Licencia"-->
+            <!--                                @keyup.enter="focusNextInput('input-17','input-18','input-18')"-->
+            <!--                        />-->
+            <!--                    </div>-->
+
+            <!-- NRO AUTO -->
+            <!--                    <div class="flex items-center gap-2">-->
+            <!--                        <label class="text-sm whitespace-nowrap">NRO AUTO:</label>-->
+            <!--                        <input-->
+            <!--                                id="input-18"-->
+            <!--                                type="text"-->
+            <!--                                class="border p-0.5 text-sm h-7 w-14"-->
+            <!--                                v-model="conductor.Nauto"-->
+            <!--                                @keyup.enter="focusNextInput('input-18','input-19','input-19')"-->
+            <!--                        />-->
+            <!--                    </div>-->
+
+            <!-- PROFESION -->
+            <!--                    <div class="flex items-center gap-2">-->
+            <!--                        <label class="text-sm whitespace-nowrap">PROFESION:</label>-->
+            <!--                        <input-->
+            <!--                                id="input-19"-->
+            <!--                                type="text"-->
+            <!--                                class="flex-1 border p-0.5 text-sm h-7 w-32"-->
+            <!--                                v-model="conductor.Profesion"-->
+            <!--                                @keyup.enter="focusNextInput('input-19','input-20','input-20')"-->
+            <!--                        />-->
+            <!--                    </div>-->
+
+            <!-- NACIONALIDAD -->
+            <div class="flex items-center gap-2">
+              <label class="text-sm whitespace-nowrap">NACIONALIDAD:</label>
+              <input id="input-17" type="text" class="flex-1 border p-0.5 text-sm h-7 w-24"
+                v-model="conductor.Nacionalidad" maxlength="8"
+                @keyup.enter="focusNextInput('input-17','input-21','input-17')" />
+            </div>
+
+            <!-- RESIDENCIA -->
+            <!--                    <div class="flex items-center gap-2">-->
+            <!--                        <label class="text-sm whitespace-nowrap">RESIDENCIA:</label>-->
+            <!--                        <input-->
+            <!--                                id="input-21"-->
+            <!--                                type="text"-->
+            <!--                                class="flex-1 border p-0.5 text-sm h-7"-->
+            <!--                                v-model="conductor.Residencia"-->
+            <!--                                @keyup.enter="focusNextInput('input-21','input-22','input-22')"-->
+            <!--                        />-->
+            <!--                    </div>-->
+
+            <!-- FECHA NACIMIENTO -->
+            <!--                    <div class="flex items-center gap-2">-->
+            <!--                        <label class="text-sm whitespace-nowrap"-->
+            <!--                        >FECHA NACIMIENTO:</label-->
+            <!--                        >-->
+            <!--                        <input-->
+            <!--                                id="input-22"-->
+            <!--                                type="text"-->
+            <!--                                class="flex-1 border p-0.5 text-sm h-7 w-24"-->
+            <!--                                v-model="conductor.FechaNac"-->
+            <!--                                @keyup.enter="focusNextInput('input-22','input-23','input-23')"-->
+            <!--                        />-->
+            <!--                    </div>-->
+
+            <!-- ESTADO CIVIL -->
+            <!--                    <div class="flex items-center gap-2">-->
+            <!--                        <label class="text-sm whitespace-nowrap">ESTADO CIVIL:</label>-->
+            <!--                        <input-->
+            <!--                                id="input-23"-->
+            <!--                                type="text"-->
+            <!--                                class="flex-1 border p-0.5 text-sm h-7 w-10"-->
+            <!--                                v-model="conductor.EstCivil"-->
+            <!--                                @keyup.enter="focusNextInput('input-23','input-24','input-24')"-->
+            <!--                        />-->
+            <!--                    </div>-->
+
+            <!-- SEXO -->
+            <!--                    <div class="flex items-center gap-2">-->
+            <!--                        <label class="text-sm whitespace-nowrap">SEXO:</label>-->
+            <!--                        <input-->
+            <!--                                id="input-24"-->
+            <!--                                type="text"-->
+            <!--                                class="flex-1 border p-0.5 text-sm h-7 w-10"-->
+            <!--                                v-model="conductor.Sexo"-->
+            <!--                                @keyup.enter="focusNextInput('input-24', 'dni', 'input-12')"-->
+            <!--                        />-->
+            <!--                    </div>-->
+          </div>
+          <div class="bg-purple-50 p-2 rounded-lg flex flex-wrap gap-2 basis-[20%]">
+            <div class="flex items-center gap-2">
+              <label class="text-sm whitespace-nowrap">EMPRESA AUT:</label>
+              <input id="input-21" type="text" class="flex-1 border p-0.5 text-sm h-7 w-full" v-model="empresa.Nombre"
+                @keyup.enter="focusNextInput('input-21','input-22','input-22')" />
+            </div>
+
+            <div class="flex items-center gap-2">
+              <label class="text-sm whitespace-nowrap">RESOLUCION EX N°:</label>
+              <input id="input-22" type="text" class="flex-1 border p-0.5 text-sm h-7 w-full"
+                v-model="empresa.Resolucion" @keyup.enter="focusNextInput('input-22','input-23','input-23')" />
+            </div>
+
+            <div class="flex items-center gap-2">
+              <label class="text-sm whitespace-nowrap">DOCUMENTO IDO N°:</label>
+              <input id="input-23" type="text" class="flex-1 border p-0.5 text-sm h-7 w-full"
+                v-model="empresa.Documento" @keyup.enter="focusNextInput('input-23','input-24','input-24')" />
+            </div>
+
+            <div class="flex items-center gap-2">
+              <label class="text-sm whitespace-nowrap">PERMISO COMP N°:</label>
+              <input id="input-24" type="text" class="flex-1 border p-0.5 text-sm h-7 w-full" v-model="empresa.Permiso"
+                @keyup.enter="focusNextInput('input-24','dni','input-24')" />
+            </div>
+          </div>
+        </div>
+        <!-- Sección de Pasajeros -->
+        <div class="bg-green-100 p-4 rounded-lg mb-1 mt-2">
+          <div class="flex gap-2 flex-wrap">
+            <!-- Columna Izquierda: Datos Personales -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <label for="dni" class="text-sm">DNI/CÉDULA:</label>
+              <input id="dni" type="text" class="flex-1 border p-1 text-sm h-8 w-28" v-model="pasajero.Documento"
+                maxlength="12" @keyup.enter="focusNextInput('dni','dni','input-25')" />
+              <button
+                class="p-1 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center justify-center w-8 h-8"
+                @click="focusNextInput('dni','dni','input-25')" aria-label="Buscar pasajero">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" stroke="white"
+                  stroke-width="2" class="bi bi-search" viewBox="0 0 16 16">
+                  <path
+                    d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0" />
+                </svg>
+              </button>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-sm">TIPO DOC:</label>
+              <input id="input-25" type="text" maxlength="50" class="border p-1 text-sm h-8 w-24"
+                v-model="pasajero.TipoDocumento" @keyup.enter="focusNextInput('input-25','input-26','input-26')" />
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-sm">NOMBRES:</label>
+              <input id="input-26" type="text" maxlength="20" class="border p-1 text-sm h-8 w-40"
+                v-model="pasajero.Nombre" @keyup.enter="focusNextInput('input-26','input-27','input-27')" />
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-sm">APELLIDO P:</label>
+              <input id="input-27" type="text" maxlength="20" class="border p-1 text-sm h-8 w-40"
+                v-model="pasajero.ApellidoPa" @keyup.enter="focusNextInput('input-27','input-28','input-28')" />
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-sm">APELLIDO M:</label>
+              <input id="input-28" type="text" maxlength="20" class="border p-1 text-sm h-8 w-40"
+                v-model="pasajero.ApellidoMa" @keyup.enter="focusNextInput('input-28','input-29','input-29')" />
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-sm">NACIONALIDAD:</label>
+              <input id="input-29" type="text" maxlength="8" class="border p-1 text-sm h-8 w-32"
+                v-model="pasajero.Nacionalidad" @keyup.enter="focusNextInput('input-29','input-30','input-30')" />
+            </div>
+
+            <div class="flex items-center gap-2">
+              <label class="text-sm">RESIDENCIA:</label>
+              <input id="input-30" type="text" class="flex-1 border p-1 text-sm h-8 w-32" v-model="pasajero.Residencia"
+                maxlength="8" @keyup.enter="focusNextInput('input-30','input-31','input-31')" />
+            </div>
+            <!--                    <div class="flex items-center gap-2">-->
+            <!--                        <label class="text-sm">DIRECCION:</label>-->
+            <!--                        <input-->
+            <!--                                id="input-31"-->
+            <!--                                type="text"-->
+            <!--                                class="flex-1 border p-1 text-sm h-8"-->
+            <!--                                v-model="pasajero.Direccion"-->
+            <!--                                @keyup.enter="focusNextInput('input-31','input-32','input-32')"-->
+            <!--                        />-->
+            <!--                    </div>-->
+            <!--                    <div class="flex items-center gap-2">-->
+            <!--                        <label class="text-sm">PROFESION:</label>-->
+            <!--                        <input-->
+            <!--                                id="input-32"-->
+            <!--                                type="text"-->
+            <!--                                class="flex-1 border p-1 text-sm h-8 w-32"-->
+            <!--                                v-model="pasajero.Profesion"-->
+            <!--                                @keyup.enter="focusNextInput('input-32','input-33','input-33')"-->
+            <!--                        />-->
+            <!--                    </div>-->
+            <div class="flex items-center gap-2">
+              <label class="text-sm">ESTADO CIVIL:</label>
+              <input id="input-31" type="text" maxlength="1" class="w-12 border p-1 text-sm h-8"
+                v-model="pasajero.EstCivil" @keyup.enter="focusNextInput('input-31','input-35','input-35')" />
+              <!--                        <label class="text-sm">SEXO:</label>-->
+              <!--                        <input-->
+              <!--                                id="input-31"-->
+              <!--                                type="text"-->
+              <!--                                maxlength="1"-->
+              <!--                                class="w-12 border p-1 text-sm h-8"-->
+              <!--                                v-model="pasajero.Sexo"-->
+              <!--                                @keyup.enter="focusNextInput('input-31','input-35','input-35')"-->
+              <!--                        />-->
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-sm">FECHA NAC:</label>
+              <input id="input-35" type="text" maxlength="10" class="flex-1 border p-1 text-sm h-8 w-32"
+                v-model="pasajero.FechaNac" @keyup.enter="focusNextInput('input-35','dni','dni')" />
+            </div>
+          </div>
+
+          <!-- Botones de Acción -->
+          <div class="mt-4 flex justify-between gap-2">
+            <button class="bg-green-500 text-white px-4 py-2 rounded flex items-center gap-2"
+              @click="agregarPasajeroAlListado">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor"
+                class="bi bi-person-plus" viewBox="0 0 16 16" stroke="white" stroke-width="1">
+                <path
+                  d="M6 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6m2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0m4 8c0 1-1 1-1 1H1s-1 0-1-1 1-4 6-4 6 3 6 4m-1-.004c-.001-.246-.154-.986-.832-1.664C9.516 10.68 8.289 10 6 10s-3.516.68-4.168 1.332c-.678.678-.83 1.418-.832 1.664z" />
+                <path fill-rule="evenodd"
+                  d="M13.5 5a.5.5 0 0 1 .5.5V7h1.5a.5.5 0 0 1 0 1H14v1.5a.5.5 0 0 1-1 0V8h-1.5a.5.5 0 0 1 0-1H13V5.5a.5.5 0 0 1 .5-.5" />
+              </svg>
+              AGREGAR PASAJERO
+            </button>
+            <button @click="deleteAllRows" class="bg-red-500 text-white px-4 py-2 rounded flex items-center gap-2">
+              ELIMINAR LISTA PASAJEROS
+            </button>
+            <button class="bg-blue-500 text-white px-4 py-2 rounded" @click="showModal = true">
+              IMPRIMIR RELACION
+            </button>
+            <button class="bg-green-500 text-white px-4 py-2 rounded" @click="showModalTarjetas = true">
+              IMPRIMIR TARJETAS
+            </button>
+          </div>
+        </div>
+        <!-- Sección de Listado Estilizado con Scrolls Funcionales -->
+        <div class="bg-gray-100 p-1 rounded-lg shadow-md" style="max-height: 250px; overflow-y: scroll">
+          <!-- Contenedor para tabla con scroll horizontal y vertical -->
+          <div class="overflow-x-auto">
+            <div class="overflow-auto">
+              <table class="min-w-full bg-white border-collapse text-base">
+                <thead class="bg-gray-800 text-white sticky top-0 z-10">
+                  <tr>
+                    <th class="border p-1">AC</th>
+                    <th class="border p-1">NRO</th>
+                    <th class="border p-1">DOCUMENTO</th>
+                    <th class="border p-1">T_DOC</th>
+                    <!--                                <th class="border p-1">Residencia</th>-->
+                    <th class="border p-1">NOMBRES</th>
+                    <th class="border p-1">APELLIDO PA</th>
+                    <th class="border p-1">APELLIDO MA</th>
+                    <!--                                <th class="border p-1">Dirección</th>-->
+                    <th class="border p-1">NACIONALIDAD</th>
+                    <!--                                <th class="border p-1">Profesión</th>-->
+                    <th class="border p-1">FECHA NAC</th>
+                    <!--                                <th class="border p-1">E.CI</th>-->
+                    <th class="border p-1">SX</th>
+                    <!--                                <th class="border p-1">Mva1</th>-->
+                    <th class="border p-1">T.P</th>
+                    <th class="border p-1">T.C</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="item in listado" :key="index" class="hover:bg-gray-100 transition-colors">
+                    <td @click="deleteRow(index)">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path
+                          d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" />
+                      </svg>
+                    </td>
+                    <td class="border p-1 text-center">{{ item.Nro }}</td>
+                    <td class="border p-1 text-center">
+                      <input type="text" v-model="item.Documento" class="w-full p-1 text-base border rounded" />
+                    </td>
+                    <td class="border p-1 text-center">
+                      <input type="text" v-model="item.TipoDocumento" class="w-full p-1 text-base border rounded" />
+                    </td>
+                    <!--                                <td class="border p-1 text-center">-->
+                    <!--                                    <input-->
+                    <!--                                            type="text"-->
+                    <!--                                            v-model="item.Residencia"-->
+                    <!--                                            class="w-full p-1 text-base border rounded"-->
+                    <!--                                    />-->
+                    <!--                                </td>-->
+                    <td class="border p-1 text-center">
+                      <input type="text" v-model="item.Nombres" class="w-full p-1 text-base border rounded" />
+                    </td>
+                    <td class="border p-1 text-center">
+                      <input type="text" v-model="item.ApellidoP" class="w-full p-1 text-base border rounded" />
+                    </td>
+                    <td class="border p-1 text-center">
+                      <input type="text" v-model="item.ApellidoM" class="w-full p-1 text-base border rounded" />
+                    </td>
+                    <!--                                <td class="border p-1 text-center">-->
+                    <!--                                    <input-->
+                    <!--                                            type="text"-->
+                    <!--                                            v-model="item.Direccion"-->
+                    <!--                                            class="w-full p-1 text-base border rounded"-->
+                    <!--                                    />-->
+                    <!--                                </td>-->
+                    <td class="border p-1 text-center">
+                      <input type="text" v-model="item.Nacionalidad" class="w-full p-1 text-base border rounded" />
+                    </td>
+                    <!--                                <td class="border p-1 text-center">-->
+                    <!--                                    <input-->
+                    <!--                                            type="text"-->
+                    <!--                                            v-model="item.Profesion"-->
+                    <!--                                            class="w-full p-1 text-base border rounded"-->
+                    <!--                                    />-->
+                    <!--                                </td>-->
+                    <td class="border p-1 text-center">
+                      <input type="text" v-model="item.FechaNac" class="w-full p-1 text-base border rounded" />
+                    </td>
+                    <td class="border p-1 text-center">
+                      <input type="text" v-model="item.EstCivil" class="w-full p-1 text-base border rounded" />
+                    </td>
+                    <!--                                <td class="border p-1 text-center">-->
+                    <!--                                    <input-->
+                    <!--                                            type="text"-->
+                    <!--                                            v-model="item.Sexo"-->
+                    <!--                                            class="w-full p-1 text-base border rounded"-->
+                    <!--                                    />-->
+                    <!--                                </td>-->
+                    <!--                                <td class="border p-1 text-center">-->
+                    <!--                                    <input-->
+                    <!--                                            type="text"-->
+                    <!--                                            v-model="item.Mva1"-->
+                    <!--                                            class="w-full p-1 text-base border rounded"-->
+                    <!--                                    />-->
+                    <!--                                </td>-->
+                    <td class="border p-1 text-center">
+                      <input type="text" v-model="item.TarPeru" class="w-full p-1 text-base border rounded"
+                        @input="item.TarPeru = item.TarPeru ? '✔' : ''" maxlength="1" />
+                    </td>
+                    <td class="border p-1 text-center">
+                      <input type="text" v-model="item.TarChile" class="w-full p-1 text-base border rounded"
+                        @input="item.TarChile = item.TarChile ? '✔' : ''" maxlength="1" />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Modal -->
+    <div v-if="showModal" class="modal-overlay">
+      <div class="modal-content">
+        <!-- Título -->
+        <h3 class="text-xl font-bold text-center mb-6">Selecciona una opción:</h3>
+
+        <!-- Botones principales -->
+        <div class="flex flex-col sm:flex-row gap-4 justify-center mb-6">
+          <button
+            class="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-3 rounded-lg shadow-md transition duration-200 w-full sm:w-auto"
+            @click="selectOption('RELACION-T-A')">
+            Tacna-Arica
+          </button>
+          <button
+            class="bg-green-500 hover:bg-green-600 text-white font-semibold px-6 py-3 rounded-lg shadow-md transition duration-200 w-full sm:w-auto"
+            @click="selectOption('RELACION-A-T')">
+            Arica-Tacna
+          </button>
+        </div>
+        <!-- Separador visual -->
+        <div class="border-t border-gray-300 my-4"></div>
+
+        <!-- Opciones secundarias: CABEZERA -->
+        <div class="flex flex-col items-center gap-2 text-sm">
+          <p class="text-gray-600 italic">Otras opciones disponibles:</p>
+          <div class="flex gap-2">
+            <button class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded"
+              @click="selectOption('RELACION-CABEZERA-T-A')">
+              CABEZERA Tacna-Arica
+            </button>
+            <button class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded"
+              @click="selectOption('RELACION-CABEZERA-A-T')">
+              CABEZERA Arica-Tacna
+            </button>
+          </div>
+        </div>
+
+        <!-- Botón Cancelar -->
+        <button class="mt-4 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded w-full transition duration-200"
+          @click="closeModal">
+          Cancelar
+        </button>
+      </div>
+    </div>
+    <div v-if="showModalTarjetas" class="modal-overlay">
+      <div class="modal-content">
+        <!-- Título -->
+        <h3 class="text-lg font-bold mb-4">Selecciona una opción:</h3>
+
+        <!-- Opciones principales: Arica-Tacna y Tacna-Arica -->
+        <div class="flex gap-4 justify-center mb-4">
+          <button
+            class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg shadow-md transition duration-200"
+            @click="selectOption('TARJETA-T-A')">
+            <span class="text-xl font-bold">Tacna-Arica</span>
+          </button>
+
+          <button
+            class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg shadow-md transition duration-200"
+            @click="selectOption('TARJETA-A-T')">
+            <span class="text-xl font-bold">Arica-Tacna</span>
+          </button>
+        </div>
+
+        <!-- Separador visual -->
+        <div class="border-t border-gray-300 my-4"></div>
+
+        <!-- Opciones secundarias: CABEZERA -->
+        <div class="flex flex-col items-center gap-2 text-sm">
+          <p class="text-gray-600 italic">Otras opciones disponibles:</p>
+          <div class="flex gap-2">
+            <button class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded"
+              @click="selectOption('TARJETA-CABEZERA-T-A')">
+              CABEZERA Tacna-Arica
+            </button>
+            <button class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded"
+              @click="selectOption('TARJETA-CABEZERA-A-T')">
+              CABEZERA Arica-Tacna
+            </button>
+          </div>
+        </div>
+
+        <!-- Botón Cancelar -->
+        <button class="mt-4 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded w-full transition duration-200"
+          @click="closeModalTarjetas">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./index.js"></script>
+</body>
+
+</html>

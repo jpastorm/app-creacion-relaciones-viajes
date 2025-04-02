@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cargando...</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
+        .loading-message {
+            font-size: 20px;
+            color: #333;
+        }
+        .error-message {
+            font-size: 20px;
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-message">Cargando...</div>
+    <div class="error-message" style="display: none;"></div>
+
+    <script>
+        const { ipcRenderer } = require("electron");
+
+        ipcRenderer.on("loading-error", (event, message) => {
+            document.querySelector(".loading-message").style.display = "none";
+            document.querySelector(".error-message").style.display = "block";
+            document.querySelector(".error-message").textContent = message;
+        });
+    </script>
+</body>
+</html>

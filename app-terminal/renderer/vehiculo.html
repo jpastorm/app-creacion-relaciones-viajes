@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GESTION DE VEHICULOS</title>
+    <!-- TailwindCSS CDN -->
+    <script src="assets/tailwindcss.js"></script>
+    <script src="assets/sweetalert2@11"></script>
+    <link rel="stylesheet" href="assets/global.css">
+    <!-- Vue.js CDN -->
+    <script src="assets/vue.js"></script>
+</head>
+<body class="flex items-center justify-center w-full h-full bg-gray-100">
+<div id="app" class="relative w-full max-w-4xl p-6 bg-white rounded-lg shadow-lg">
+    <!-- Campos de Búsqueda -->
+    <div class="mb-6 space-y-4">
+        <input v-model="busquedaPatente" type="text" placeholder="Buscar por Patente"
+               class="w-full p-2 border rounded">
+    </div>
+
+    <!-- Lista de Vehículos con Paginación -->
+    <div class="mt-8">
+        <h3 class="text-lg font-semibold mb-4">Lista de Vehículos</h3>
+        <div class="space-y-4 max-h-64 overflow-y-auto">
+            <div v-for="(item, index) in vehiculos" :key="index"
+                 class="flex justify-between items-center p-4 border rounded">
+                <span>{{ item.Patente }} - {{ item.Marca }} {{ item.Modelo }}</span>
+                <div>
+                    <button @click="editarVehiculo(item)"
+                            class="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 mr-2">
+                        Editar
+                    </button>
+                    <button @click="eliminarVehiculo(item.Patente)"
+                            class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600">
+                        Eliminar
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Paginación -->
+        <div class="flex justify-center mt-6">
+            <button @click="paginaAnterior" :disabled="paginaActual === 1"
+                    class="px-4 py-2 bg-gray-300 rounded-l hover:bg-gray-400">
+                Anterior
+            </button>
+            <span class="px-4 py-2 bg-gray-200">{{ paginaActual }}</span>
+            <button @click="paginaSiguiente" :disabled="paginaActual === totalPaginasBackend"
+                    class="px-4 py-2 bg-gray-300 rounded-r hover:bg-gray-400">
+                Siguiente
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal para el Formulario -->
+    <div v-if="mostrarModal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+        <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-2xl">
+            <h2 class="text-xl font-semibold mb-4">{{ modoEdicion ? 'Editar Vehículo' : 'Nuevo Vehículo' }}</h2>
+            <form @submit.prevent="guardarVehiculo" class="space-y-6">
+                <div class="grid grid-cols-2 gap-6">
+                    <input v-model="vehiculo.Patente" type="text" placeholder="Patente" class="p-2 border rounded" maxlength="12">
+                    <input v-model="vehiculo.Tipo" type="text" placeholder="Tipo" class="p-2 border rounded" maxlength="15">
+                    <input v-model="vehiculo.Modelo" type="text" placeholder="Modelo" class="p-2 border rounded" maxlength="15">
+                    <input v-model="vehiculo.Motor" type="text" placeholder="Motor" class="p-2 border rounded" maxlength="15">
+                    <input v-model="vehiculo.Marca" type="text" placeholder="Marca" class="p-2 border rounded" maxlength="15">
+                    <input v-model="vehiculo.NroAuto" type="text" placeholder="Nro Auto" class="p-2 border rounded" maxlength="5">
+                    <input v-model="vehiculo.Anio" type="text" placeholder="Año" class="p-2 border rounded" maxlength="4">
+                    <input v-model="vehiculo.Pais" type="text" placeholder="País" class="p-2 border rounded" maxlength="8">
+                    <input v-model="vehiculo.Empresa" type="text" placeholder="Empresa" class="p-2 border rounded" maxlength="45">
+                    <input v-model="vehiculo.Chasis" type="text" placeholder="Chasis" class="p-2 border rounded" maxlength="45">
+                    <input v-model="vehiculo.Costo" type="text" placeholder="Costo" class="p-2 border rounded" maxlength="8">
+                </div>
+                <!-- Botones del Formulario -->
+                <div class="flex justify-between mt-8">
+                    <button type="button" @click="cancelar"
+                            class="px-6 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                        {{ modoEdicion ? 'Actualizar' : 'Guardar' }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script type="module">
+    const {createApp, ref, computed, onMounted, watch} = Vue;
+    import {alertaError, alertaSuccess, alertaWarning} from './utils.js';
+
+    createApp({
+        setup() {
+
+            // Datos de los vehículos
+            const vehiculos = ref([]);
+            const vehiculo = ref({
+                Patente: "",
+                Tipo: "",
+                Modelo: "",
+                Motor: "",
+                Marca: "",
+                Anio: "",
+                Pais: "",
+                Empresa: "",
+                Chasis: "",
+                NroAuto: "",
+                Costo: "",
+            });
+            const modoEdicion = ref(false);
+            const mostrarModal = ref(false);
+            const paginaActual = ref(1);
+            const elementosPorPagina = 10;
+            const totalRegistros = ref(0);
+            const totalPaginasBackend = ref(0);
+            const busquedaPatente = ref("");
+            let timeout = null;
+
+            // Métodos
+            const cargarVehiculos = async () => {
+                try {
+                    const response = await window.electronAPI.obtenerVehiculosPaginados({
+                        page: paginaActual.value,
+                        page_size: elementosPorPagina,
+                        patente: busquedaPatente.value,
+                    });
+
+                    if (response.error) {
+                        await alertaError("Error al cargar los vehículos.")
+                        console.error("Error en la respuesta del servidor:", response.error);
+                        return;
+                    }
+
+                    vehiculos.value = response.data; // Datos de vehículos
+                    totalRegistros.value = response.totalRecords; // Total de registros
+                    totalPaginasBackend.value = response.totalPages; // Total de páginas
+                    console.log(response)
+                } catch (error) {
+                    await alertaError("Error al cargar los vehículos.")
+                    console.error("Error al cargar vehículos:", error);
+                }
+            };
+
+            // Función para manejar el debounce
+            const debounceCargarVehiculos = () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    cargarVehiculos();
+                    paginaActual.value = 1
+                }, 1000); // 1 segundos
+            };
+
+            // Watchers para detectar cambios en los inputs
+            watch(busquedaPatente, debounceCargarVehiculos);
+            const guardarVehiculo = async () => {
+                try {
+                    const vehiculoPlano = {...vehiculo.value}; // Elimina la reactividad
+
+                    if (modoEdicion.value) {
+                        await window.electronAPI.createUpdateVehiculo(vehiculoPlano);
+                        await alertaSuccess("Vehículo Actualizado")
+                    } else {
+                        await window.electronAPI.createUpdateVehiculo(vehiculoPlano);
+                        await alertaSuccess("Vehículo Creado")
+                    }
+
+                    limpiarFormulario();
+                    mostrarModal.value = false;
+                    await cargarVehiculos();
+                } catch (error) {
+                    await alertaError("Error al guardar los vehículos.")
+                    console.error("Error al guardar/actualizar el vehículo:", error);
+                }
+            };
+
+            const editarVehiculo = (item) => {
+                Object.assign(vehiculo.value, item);
+                modoEdicion.value = true;
+                mostrarModal.value = true;
+            };
+
+            const eliminarVehiculo = async (id) => {
+                try {
+                    await window.electronAPI.eliminarVehiculo(id);
+                    await alertaSuccess("Vehículo ELIMINADO")
+                    await cargarVehiculos();
+                } catch (error) {
+                    await alertaError("Error al eliminar vehículo.")
+                    console.error("Error al eliminar el vehículo:", error);
+                }
+            };
+
+            const cancelar = () => {
+                limpiarFormulario();
+                modoEdicion.value = false;
+                mostrarModal.value = false;
+            };
+
+            const limpiarFormulario = () => {
+                vehiculo.value = {
+                    Patente: "",
+                    Tipo: "",
+                    Modelo: "",
+                    Motor: "",
+                    Marca: "",
+                    Anio: "",
+                    Pais: "",
+                    Empresa: "",
+                    Chasis: "",
+                    NroAuto: "",
+                    Costo: "",
+                };
+            };
+
+            const paginaAnterior = () => {
+                if (paginaActual.value > 1) {
+                    paginaActual.value--;
+                    console.log("Página anterior:", paginaActual.value); // Verifica el valor
+                    cargarVehiculos();
+                }
+            };
+
+            const paginaSiguiente = () => {
+                if (paginaActual.value < totalPaginasBackend.value) {
+                    paginaActual.value++;
+                    console.log("Página siguiente:", paginaActual.value); // Verifica el valor
+                    cargarVehiculos();
+                }
+            };
+
+            onMounted(() => {
+                cargarVehiculos();
+            });
+
+            return {
+                vehiculos,
+                vehiculo,
+                modoEdicion,
+                mostrarModal,
+                paginaActual,
+                totalPaginasBackend,
+                guardarVehiculo,
+                editarVehiculo,
+                eliminarVehiculo,
+                cancelar,
+                paginaAnterior,
+                paginaSiguiente,
+                busquedaPatente,
+                cargarVehiculos,
+            };
+        },
+    }).mount("#app");
+</script>
+</body>
+</html>

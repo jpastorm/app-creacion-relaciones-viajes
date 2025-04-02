@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PREFERENCIAS</title>
+    <script src="assets/tailwindcss.js"></script>
+    <script src="assets/sweetalert2@11"></script>
+    <script src="assets/vue.js"></script>
+    <link rel="stylesheet" href="assets/global.css">
+    <script>
+        const {createApp, ref, onMounted, reactive} = Vue;
+    </script>
+</head>
+<body class="bg-gray-100 p-6">
+<div id="app" class="max-w-2xl mx-auto bg-white p-6 shadow-lg rounded-lg">
+    <h2 class="text-2xl font-bold mb-4">Preferencias</h2>
+
+    <label class="block font-bold">
+        IMPRESORA:
+        <select
+                v-model="preferencias.impresoraActual"
+                class="w-full p-2 border rounded"
+        >
+            <!-- Opción por defecto -->
+            <option :value="null" disabled>Selecciona una opción</option>
+
+            <!-- Iterar sobre las opciones de impresoras -->
+            <option
+                    v-for="opcion in opcionesImpresoras"
+                    :key="opcion"
+                    :value="opcion"
+            >
+                <span :style="{ color: opcion === impresoraPorDefecto ? 'green' : 'black' }">
+                    {{ opcion }}{{ opcion === impresoraPorDefecto ? ' ✅' : '' }}
+                </span>
+            </option>
+        </select>
+    </label>
+    <hr class="my-4 h-0.5 bg-gray-200 border-0">
+    <div class="space-y-2">
+        <label class="block font-bold">Relación ARICA - TACNA:
+            <select v-model="preferencias.relacionAT" class="w-full p-2 border rounded">
+                <option :value="">Selecciona una opcion</option>
+                <option v-for="opcion in opcionesPlantillas" :key="opcion.id" :value="opcion.id">
+                    {{ opcion.titulo }}
+                </option>
+            </select>
+        </label>
+        <label class="block font-bold">Relación TACNA - ARICA:
+            <select v-model="preferencias.relacionTA" class="w-full p-2 border rounded">
+                <option :value="">Selecciona una opcion</option>
+                <option v-for="opcion in opcionesPlantillas" :key="opcion.id" :value="opcion.id">
+                    {{ opcion.titulo }}
+                </option>
+            </select>
+        </label>
+        <label class="block font-bold">Tarjeta ARICA - TACNA:
+            <select v-model="preferencias.tarjetaAT" class="w-full p-2 border rounded">
+                <option :value="">Selecciona una opcion</option>
+                <option v-for="opcion in opcionesPlantillas" :key="opcion.id" :value="opcion.id">
+                    {{ opcion.titulo }}
+                </option>
+            </select>
+        </label>
+        <label class="block font-bold">Tarjeta TACNA - ARICA:
+            <select v-model="preferencias.tarjetaTA" class="w-full p-2 border rounded">
+                <option :value="">Selecciona una opcion</option>
+                <option v-for="opcion in opcionesPlantillas" :key="opcion.id" :value="opcion.id">
+                    {{ opcion.titulo }}
+                </option>
+            </select>
+        </label>
+        <label class="block font-bold">Relación Cabezera ARICA - TACNA:
+            <select v-model="preferencias.relacionCabezeraAT" class="w-full p-2 border rounded">
+                <option :value="">Selecciona una opcion</option>
+                <option v-for="opcion in opcionesPlantillas" :key="opcion.id" :value="opcion.id">
+                    {{ opcion.titulo }}
+                </option>
+            </select>
+        </label>
+        <label class="block font-bold">Relación Cabezera TACNA - ARICA:
+            <select v-model="preferencias.relacionCabezeraTA" class="w-full p-2 border rounded">
+                <option :value="">Selecciona una opcion</option>
+                <option v-for="opcion in opcionesPlantillas" :key="opcion.id" :value="opcion.id">
+                    {{ opcion.titulo }}
+                </option>
+            </select>
+        </label>
+        <label class="block font-bold">Tarjeta Cabezera ARICA - TACNA:
+            <select v-model="preferencias.tarjetaCabezeraAT" class="w-full p-2 border rounded">
+                <option :value="">Selecciona una opcion</option>
+                <option v-for="opcion in opcionesPlantillas" :key="opcion.id" :value="opcion.id">
+                    {{ opcion.titulo }}
+                </option>
+            </select>
+        </label>
+        <label class="block font-bold">Tarjeta Cabezera TACNA - ARICA:
+            <select v-model="preferencias.tarjetaCabezeraTA" class="w-full p-2 border rounded">
+                <option :value="">Selecciona una opcion</option>
+                <option v-for="opcion in opcionesPlantillas" :key="opcion.id" :value="opcion.id">
+                    {{ opcion.titulo }}
+                </option>
+            </select>
+        </label>
+        <button @click="guardarPreferencias" class="bg-blue-500 text-white px-4 py-2 rounded">Guardar</button>
+    </div>
+</div>
+
+<script type="module">
+    import {alertaError, alertaSuccess, alertaWarning} from "./utils.js";
+
+    createApp({
+        setup() {
+            const preferencias = reactive({
+                tarjetaAT: "",
+                tarjetaTA: "",
+                tarjetaCabezeraAT: "",
+                tarjetaCabezeraTA: "",
+                relacionAT: "",
+                relacionTA: "",
+                relacionCabezeraAT: "",
+                relacionCabezeraTA: "",
+                impresoraActual: "",
+            });
+
+            const opcionesPlantillas = ref([]);
+            const opcionesImpresoras = ref([]);
+            const impresoraPorDefecto = ref("");
+
+            const cargarPlantillas = async () => {
+                try {
+                    const data = await window.electronAPI.listarPlantillas();
+                    opcionesPlantillas.value = data.data || [];
+                } catch (error) {
+                    console.error("Error cargando plantillas:", error);
+                    await alertaError("Error cargando plantillas")
+                }
+            };
+            const cargarImpresoras = async () => {
+                try {
+                    const data = await window.electronAPI.listarImpresoras();
+                    opcionesImpresoras.value = data.impresoras || [];
+                    impresoraPorDefecto.value = data.actual || "";
+                    // Establecer la impresora por defecto como la seleccionada inicialmente
+                    if (impresoraPorDefecto.value) {
+                        preferencias.impresoraActual = impresoraPorDefecto.value;
+                    }
+                    console.log(data);
+                } catch (error) {
+                    console.error("Error cargando impresoras:", error);
+                    await alertaError("Error cargando impresoras")
+                }
+            };
+
+            const cargarPreferencias = async () => {
+                const data = await window.electronAPI.getPreferences();
+                console.log(data)
+                preferencias.tarjetaAT = data["TARJETA-A-T"];
+                preferencias.tarjetaTA = data["TARJETA-T-A"];
+                preferencias.tarjetaCabezeraAT = data["TARJETA-CABEZERA-A-T"];
+                preferencias.tarjetaCabezeraTA = data["TARJETA-CABEZERA-T-A"];
+                preferencias.relacionAT = data["RELACION-A-T"];
+                preferencias.relacionTA = data["RELACION-T-A"]
+                preferencias.relacionCabezeraAT = data["RELACION-CABEZERA-A-T"];
+                preferencias.relacionCabezeraTA = data["RELACION-CABEZERA-T-A"]
+                preferencias.impresoraActual = data["IMPRESORA-ACTUAL"]
+            };
+
+            const guardarPreferencias = async () => {
+                await window.electronAPI.savePreferences(preferencias.tarjetaAT, preferencias.tarjetaTA, preferencias.tarjetaCabezeraAT, preferencias.tarjetaCabezeraTA, preferencias.relacionAT, preferencias.relacionTA, preferencias.relacionCabezeraAT, preferencias.relacionCabezeraTA, preferencias.impresoraActual);
+                await alertaSuccess("Preferencias guardadas");
+            };
+
+            onMounted(async () => {
+                await cargarPlantillas();
+                await cargarImpresoras()
+                await cargarPreferencias();
+            });
+
+            return {preferencias, opcionesPlantillas, opcionesImpresoras, guardarPreferencias, impresoraPorDefecto};
+        }
+    }).mount("#app");
+</script>
+</body>
+</html>

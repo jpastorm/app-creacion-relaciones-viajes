@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GESTIÓN DE PASAJEROS</title>
+    <!-- TailwindCSS CDN -->
+    <script src="assets/tailwindcss.js"></script>
+    <script src="assets/sweetalert2@11"></script>
+    <link rel="stylesheet" href="assets/global.css">
+    <!-- Vue.js CDN -->
+    <script src="assets/vue.js"></script>
+</head>
+<body class="flex items-center justify-center min-h-screen bg-gray-100">
+<div id="app" class="relative w-[800px] p-6 bg-white rounded-lg shadow-lg">
+    <!-- Título -->
+    <h2 class="text-xl font-bold text-center mb-4">Gestión de Pasajeros</h2>
+
+    <!-- Campos de Búsqueda -->
+    <div class="mb-6 space-y-4">
+        <input v-model="busquedaDocumento" type="text" placeholder="Buscar por DNI/CÉDULA" class="w-full p-2 border rounded">
+        <input v-model="busquedaNombre" type="text" placeholder="Buscar por Nombre" class="w-full p-2 border rounded">
+    </div>
+
+    <!-- Lista de Pasajeros con Paginación -->
+    <div class="mt-6">
+        <h3 class="text-lg font-semibold mb-2">Lista de Pasajeros</h3>
+        <div class="space-y-2 max-h-48 overflow-y-auto">
+            <div v-for="(item, index) in pasajeros" :key="index" class="flex justify-between items-center p-2 border rounded">
+                <span>{{ item.Nombre }} {{ item.ApellidoPa }} - {{ item.Documento }}</span>
+                <div>
+                    <button @click="editarPasajero(item)" class="px-2 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 mr-2">
+                        Editar
+                    </button>
+                    <button @click="eliminarPasajero(item.Documento)" class="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600">
+                        Eliminar
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Paginación -->
+        <div class="flex justify-center mt-4">
+            <button @click="paginaAnterior" :disabled="paginaActual === 1" class="px-3 py-1 bg-gray-300 rounded-l hover:bg-gray-400">
+                Anterior
+            </button>
+            <span class="px-3 py-1 bg-gray-200">{{ paginaActual }}</span>
+            <button @click="paginaSiguiente" :disabled="paginaActual === totalPaginasBackend" class="px-3 py-1 bg-gray-300 rounded-r hover:bg-gray-400">
+                Siguiente
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal para el Formulario -->
+    <div v-if="mostrarModal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+        <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-2xl">
+            <h2 class="text-xl font-semibold mb-4">{{ modoEdicion ? 'Editar Pasajero' : 'Nuevo Pasajero' }}</h2>
+            <form @submit.prevent="guardarPasajero" class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <input v-model="pasajero.Documento" type="text" placeholder="DNI/CÉDULA" class="p-2 border rounded" maxlength="12">
+                    <input v-model="pasajero.TipoDocumento" type="text" placeholder="TIPO DOCUMENTO" class="p-2 border rounded" maxlength="50">
+                    <input v-model="pasajero.Nombre" type="text" placeholder="NOMBRES" class="p-2 border rounded" maxlength="20">
+                    <input v-model="pasajero.ApellidoPa" type="text" placeholder="APELLIDO P" class="p-2 border rounded" maxlength="20">
+                    <input v-model="pasajero.ApellidoMa" type="text" placeholder="APELLIDO M" class="p-2 border rounded" maxlength="20">
+                    <input v-model="pasajero.Direccion" type="text" placeholder="DOMICILIO" class="p-2 border rounded" maxlength="255">
+                    <input v-model="pasajero.Licencia" type="text" placeholder="LICENCIA" class="p-2 border rounded" maxlength="15">
+                    <input v-model="pasajero.Nauto" type="text" placeholder="NRO AUTO" class="p-2 border rounded" maxlength="5">
+                    <input v-model="pasajero.Profesion" type="text" placeholder="PROFESIÓN" class="p-2 border rounded" maxlength="20">
+                    <input v-model="pasajero.Nacionalidad" type="text" placeholder="NACIONALIDAD" class="p-2 border rounded" maxlength="8">
+                    <input v-model="pasajero.Residencia" type="text" placeholder="RESIDENCIA" class="p-2 border rounded" maxlength="8">
+                    <input v-model="pasajero.FechaNac" type="text" placeholder="FECHA NACIMIENTO" class="p-2 border rounded" maxlength="10">
+                    <input v-model="pasajero.EstCivil" type="text" placeholder="ESTADO CIVIL" class="p-2 border rounded" maxlength="1">
+                    <input v-model="pasajero.Sexo" type="text" placeholder="SEXO" class="p-2 border rounded" maxlength="1">
+                </div>
+                <!-- Botones del Formulario -->
+                <div class="flex justify-between mt-6">
+                    <button type="button" @click="cancelar" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                        {{ modoEdicion ? 'Actualizar' : 'Guardar' }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<!-- Script Vue.js -->
+<script type="module">
+    const { createApp, ref, computed, onMounted, watch } = Vue;
+    import {alertaError, alertaSuccess, alertaWarning} from './utils.js';
+    createApp({
+        setup() {
+            // Datos de los pasajeros
+            const pasajeros = ref([]);
+            const pasajero = ref({
+                Documento: "",
+                TipoDocumento: "",
+                Nombre: "",
+                ApellidoPa: "",
+                ApellidoMa: "",
+                Direccion: "",
+                Licencia: "",
+                Nauto: "",
+                Profesion: "",
+                Nacionalidad: "",
+                Residencia: "",
+                FechaNac: "",
+                EstCivil: "",
+                Sexo: "",
+            });
+            const modoEdicion = ref(false);
+            const mostrarModal = ref(false);
+            const paginaActual = ref(1);
+            const elementosPorPagina = 10;
+            const totalRegistros = ref(0);
+            const busquedaDocumento = ref("");
+            const busquedaNombre = ref("");
+            const totalPaginasBackend = ref(0);
+            let timeout = null;
+
+            // Métodos
+            const cargarPasajeros = async () => {
+                try {
+                    const response = await window.electronAPI.obtenerConductoresPaginados({
+                        page: paginaActual.value,
+                        pageSize: elementosPorPagina,
+                        documento: busquedaDocumento.value,
+                        nombre: busquedaNombre.value,
+                        is_conductor: false,
+                    });
+                    console.log("Respuesta de la API:", response);
+
+                    if (response.error) {
+                        await alertaError("Error al cargar los pasajeros.");
+                        console.error("Error en la respuesta del servidor:", response.error);
+                        return;
+                    }
+
+                    pasajeros.value = response.data;
+                    totalRegistros.value = response.totalRecords;
+                    totalPaginasBackend.value = response.totalPages;
+                } catch (error) {
+                    await alertaError("Error al cargar los pasajeros.");
+                    console.error("Error al cargar pasajeros:", error);
+                }
+            };
+
+            const debounceCargarPasajeros = () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    cargarPasajeros();
+                    paginaActual.value = 1;
+                }, 1000); // 1 segundo
+            };
+
+            watch(busquedaDocumento, debounceCargarPasajeros);
+            watch(busquedaNombre, debounceCargarPasajeros);
+
+            const guardarPasajero = async () => {
+                if (pasajero.value.Licencia !== "" || pasajero.value.Nauto !== "") {
+                    const result = await Swal.fire({
+                        title: "Confirmación",
+                        text: "Si llenas Licencia o Número de Auto, el pasajero pasará a ser conductor.",
+                        icon: "warning",
+                        showCancelButton: true,
+                        confirmButtonText: "Aceptar",
+                        cancelButtonText: "Cancelar"
+                    });
+                    if (!result.isConfirmed) {
+                        return;
+                    }
+                }
+
+                try {
+                    const pasajeroPlano = { ...pasajero.value };
+
+                    if (modoEdicion.value) {
+                        await window.electronAPI.createUpdateConductor(pasajeroPlano);
+                        await alertaSuccess("Pasajero ACTUALIZADO");
+                    } else {
+                        await window.electronAPI.createUpdateConductor(pasajeroPlano);
+                        await alertaSuccess("Pasajero CREADO");
+                    }
+
+                    limpiarFormulario();
+                    mostrarModal.value = false;
+                    await cargarPasajeros();
+                } catch (error) {
+                    await alertaError("Error al guardar/actualizar el pasajero.");
+                    console.error("Error al guardar/actualizar el pasajero:", error);
+                }
+            };
+
+            const editarPasajero = (item) => {
+                Object.assign(pasajero.value, item);
+                modoEdicion.value = true;
+                mostrarModal.value = true;
+            };
+
+            const eliminarPasajero = async (id) => {
+                try {
+                    await window.electronAPI.eliminarConductor(id);
+                    await alertaSuccess("Pasajero eliminado");
+                    await cargarPasajeros();
+                } catch (error) {
+                    await alertaError("Error al eliminar el pasajero.");
+                    console.error("Error al eliminar el pasajero:", error);
+                }
+            };
+
+            const cancelar = () => {
+                limpiarFormulario();
+                modoEdicion.value = false;
+                mostrarModal.value = false;
+            };
+
+            const limpiarFormulario = () => {
+                pasajero.value = {
+                    Documento: "",
+                    TipoDocumento: "",
+                    Nombre: "",
+                    ApellidoPa: "",
+                    ApellidoMa: "",
+                    Direccion: "",
+                    Licencia: "",
+                    Nauto: "",
+                    Profesion: "",
+                    Nacionalidad: "",
+                    Residencia: "",
+                    FechaNac: "",
+                    EstCivil: "",
+                    Sexo: "",
+                };
+            };
+
+            const paginaAnterior = () => {
+                if (paginaActual.value > 1) {
+                    paginaActual.value--;
+                    cargarPasajeros();
+                }
+            };
+
+            const paginaSiguiente = () => {
+                if (paginaActual.value < totalPaginasBackend.value) {
+                    paginaActual.value++;
+                    cargarPasajeros();
+                }
+            };
+
+            onMounted(() => {
+                cargarPasajeros();
+            });
+
+            return {
+                pasajeros,
+                pasajero,
+                modoEdicion,
+                mostrarModal,
+                paginaActual,
+                busquedaDocumento,
+                busquedaNombre,
+                guardarPasajero,
+                editarPasajero,
+                eliminarPasajero,
+                cancelar,
+                paginaAnterior,
+                paginaSiguiente,
+                totalPaginasBackend,
+            };
+        },
+    }).mount("#app");
+</script>
+</body>
+</html>

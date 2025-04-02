@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GESTION DE CONDUCTORES</title>
+    <!-- TailwindCSS CDN -->
+    <script src="assets/tailwindcss.js"></script>
+    <script src="assets/sweetalert2@11"></script>
+    <!-- Vue.js CDN -->
+    <script src="assets/vue.js"></script>
+    <link rel="stylesheet" href="assets/global.css">
+</head>
+<body class="flex items-center justify-center w-full h-full bg-gray-100">
+<div id="app" class="relative w-full max-w-4xl p-6 bg-white rounded-lg shadow-lg">
+    <!-- Campos de Búsqueda -->
+    <div class="mb-6 space-y-4">
+        <input v-model="busquedaDocumento" type="text" placeholder="Buscar por Documento"
+               class="w-full p-2 border rounded">
+        <input v-model="busquedaNombre" type="text" placeholder="Buscar por Nombre" class="w-full p-2 border rounded">
+    </div>
+
+    <!-- Lista de Conductores con Paginación -->
+    <div class="mt-8">
+        <h3 class="text-lg font-semibold mb-4">Lista de Conductores</h3>
+        <div class="space-y-4 max-h-64 overflow-y-auto">
+            <div v-for="(item, index) in conductores" :key="index"
+                 class="flex justify-between items-center p-4 border rounded">
+                <span>{{ item.Nombre }} {{ item.ApellidoPa }} - {{item.Documento}}</span>
+                <div>
+                    <button @click="editarConductor(item)"
+                            class="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 mr-2">
+                        Editar
+                    </button>
+                    <button @click="eliminarConductor(item.Documento)"
+                            class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600">
+                        Eliminar
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Paginación -->
+        <div class="flex justify-center mt-6">
+            <button @click="paginaAnterior" :disabled="paginaActual === 1"
+                    class="px-4 py-2 bg-gray-300 rounded-l hover:bg-gray-400">
+                Anterior
+            </button>
+            <span class="px-4 py-2 bg-gray-200">{{ paginaActual }}</span>
+            <button @click="paginaSiguiente" :disabled="paginaActual === totalPaginasBackend"
+                    class="px-4 py-2 bg-gray-300 rounded-r hover:bg-gray-400">
+                Siguiente
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal para el Formulario -->
+    <div v-if="mostrarModal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+        <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-2xl">
+            <h2 class="text-xl font-semibold mb-4">{{ modoEdicion ? 'Editar Conductor' : 'Nuevo Conductor' }}</h2>
+            <form @submit.prevent="guardarConductor" class="space-y-6">
+                <div class="grid grid-cols-3 gap-6">
+                    <input v-model="conductor.Documento" type="text" placeholder="DNI/CÉDULA" class="p-2 border rounded" maxlength="12">
+                    <input v-model="conductor.Nombre" type="text" placeholder="NOMBRES" class="p-2 border rounded" maxlength="20">
+                    <input v-model="conductor.ApellidoPa" type="text" placeholder="APELLIDO P" class="p-2 border rounded" maxlength="20">
+                    <input v-model="conductor.ApellidoMa" type="text" placeholder="APELLIDO M" class="p-2 border rounded" maxlength="20">
+                    <input v-model="conductor.Direccion" type="text" placeholder="DOMICILIO" class="p-2 border rounded" maxlength="255">
+                    <input v-model="conductor.Licencia" type="text" placeholder="LICENCIA" class="p-2 border rounded" maxlength="15">
+                    <input v-model="conductor.Nauto" type="text" placeholder="NRO AUTO" class="p-2 border rounded" maxlength="5">
+                    <input v-model="conductor.Profesion" type="text" placeholder="PROFESIÓN" class="p-2 border rounded" maxlength="20">
+                    <input v-model="conductor.Nacionalidad" type="text" placeholder="NACIONALIDAD" class="p-2 border rounded" maxlength="8">
+                    <input v-model="conductor.Residencia" type="text" placeholder="RESIDENCIA" class="p-2 border rounded" maxlength="8">
+                    <input v-model="conductor.FechaNac" type="text" placeholder="FECHA NACIMIENTO" class="p-2 border rounded" maxlength="10">
+                    <input v-model="conductor.EstCivil" type="text" placeholder="ESTADO CIVIL" class="p-2 border rounded" maxlength="1">
+                    <input v-model="conductor.Sexo" type="text" placeholder="SEXO" class="p-2 border rounded" maxlength="1">
+                </div>
+                <!-- Botones del Formulario -->
+                <div class="flex justify-between mt-8">
+                    <button type="button" @click="cancelar" class="px-6 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                        {{ modoEdicion ? 'Actualizar' : 'Guardar' }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script type="module">
+    const {createApp, ref, computed, onMounted, watch} = Vue;
+    import {alertaError, alertaSuccess, alertaWarning} from './utils.js';
+    createApp({
+        setup() {
+
+            // Datos de los conductores
+            const conductores = ref([]);
+            const conductor = ref({
+                Documento: "",
+                Nombre: "",
+                ApellidoPa: "",
+                ApellidoMa: "",
+                Direccion: "",
+                Licencia: "",
+                Nauto: "",
+                Profesion: "",
+                Nacionalidad: "",
+                Residencia: "",
+                FechaNac: "",
+                EstCivil: "",
+                Sexo: "",
+            });
+            const modoEdicion = ref(false);
+            const mostrarModal = ref(false);
+            const paginaActual = ref(1);
+            const elementosPorPagina = 10;
+            const totalRegistros = ref(0);
+            const totalPaginasBackend = ref(0);
+            const busquedaDocumento = ref("");
+            const busquedaNombre = ref("");
+            let timeout = null;
+
+            // Métodos
+            const cargarConductores = async () => {
+                try {
+                    const response = await window.electronAPI.obtenerConductoresPaginados({
+                        page: paginaActual.value,
+                        pageSize: elementosPorPagina,
+                        is_conductor: true, // Ajusta este valor según tu lógica
+                        documento: busquedaDocumento.value,
+                        nombre: busquedaNombre.value,
+                    });
+                    console.log("Respuesta de la API:", response); // Verifica si devuelve datos
+
+                    if (response.error) {
+                        await alertaError("Error al cargar los conductores.")
+                        console.error("Error en la respuesta del servidor:", response.error);
+                        return;
+                    }
+
+                    conductores.value = response.data; // Datos de conductores
+                    totalRegistros.value = response.totalRecords; // Total de registros
+                    totalPaginasBackend.value = response.totalPages; // Total de páginas
+                } catch (error) {
+                    await alertaError("Error al cargar los conductores.")
+                    console.error("Error al cargar conductores:", error);
+                }
+            };
+
+            // Función para manejar el debounce
+            const debounceCargarConductores = () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    cargarConductores();
+                    paginaActual.value = 1
+                }, 1000); // 1 segundos
+            };
+
+            // Watchers para detectar cambios en los inputs
+            watch(busquedaDocumento, debounceCargarConductores);
+            watch(busquedaNombre, debounceCargarConductores);
+            const guardarConductor = async () => {
+                if (conductor.value.Licencia === "" || conductor.value.Nauto === "") {
+                    const result = await Swal.fire({
+                        title: "Confirmación",
+                        text: "Si la Licencia o Número de Auto son vacios, el conductor pasará a ser pasajero.",
+                        icon: "warning",
+                        showCancelButton: true,
+                        confirmButtonText: "Aceptar",
+                        cancelButtonText: "Cancelar"
+                    });
+                    if (!result.isConfirmed) {
+                        return;
+                    }
+                }
+
+                try {
+                    const conductorPlano = {...conductor.value}; // Elimina la reactividad
+
+                    if (modoEdicion.value) {
+                        await window.electronAPI.createUpdateConductor(conductorPlano);
+                        await alertaSuccess("Conductor Actualizado")
+                    } else {
+                        await window.electronAPI.createUpdateConductor(conductorPlano);
+                        await alertaError("Conductor Creado")
+                    }
+
+                    limpiarFormulario();
+                    mostrarModal.value = false;
+                    await cargarConductores();
+                } catch (error) {
+                    await alertaError("Error al guardar los conductores.")
+                    console.error("Error al guardar/actualizar el conductor:", error);
+                }
+            };
+
+            const editarConductor = (item) => {
+                Object.assign(conductor.value, item);
+                modoEdicion.value = true;
+                mostrarModal.value = true;
+            };
+
+            const eliminarConductor = async (dni) => {
+                try {
+                    await window.electronAPI.eliminarConductor(dni);
+                    await alertaSuccess("Conductor ELIMINADO")
+                    await cargarConductores();
+                } catch (error) {
+                    await alertaError("Error al eliminar conductor.")
+                    console.error("Error al eliminar el conductor:", error);
+                }
+            };
+
+            const cancelar = () => {
+                limpiarFormulario();
+                modoEdicion.value = false;
+                mostrarModal.value = false;
+            };
+
+            const limpiarFormulario = () => {
+                conductor.value = {
+                    Documento: "",
+                    Nombre: "",
+                    ApellidoPa: "",
+                    ApellidoMa: "",
+                    Direccion: "",
+                    Licencia: "",
+                    Nauto: "",
+                    Profesion: "",
+                    Nacionalidad: "",
+                    Residencia: "",
+                    FechaNac: "",
+                    EstCivil: "",
+                    Sexo: "",
+                };
+            };
+
+            const paginaAnterior = () => {
+                if (paginaActual.value > 1) {
+                    paginaActual.value--;
+                    console.log("Página anterior:", paginaActual.value); // Verifica el valor
+                    cargarConductores();
+                }
+            };
+
+            const paginaSiguiente = () => {
+                if (paginaActual.value < totalPaginasBackend.value) {
+                    paginaActual.value++;
+                    console.log("Página siguiente:", paginaActual.value); // Verifica el valor
+                    cargarConductores();
+                }
+            };
+
+            onMounted(() => {
+                cargarConductores();
+            });
+
+            return {
+                conductores,
+                conductor,
+                modoEdicion,
+                mostrarModal,
+                paginaActual,
+                totalPaginasBackend,
+                guardarConductor,
+                editarConductor,
+                eliminarConductor,
+                cancelar,
+                paginaAnterior,
+                paginaSiguiente,
+                busquedaDocumento,
+                busquedaNombre,
+                cargarConductores,
+            };
+        },
+    }).mount("#app");
+</script>
+</body>
+</html>
